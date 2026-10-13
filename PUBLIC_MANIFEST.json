@@ -1,0 +1,24 @@
+{
+  "schema": 1,
+  "files": {
+    "README.md": "8a5ae2fa70cf3a0a76fb647aaa85e5301cd9b978afcae5755b0836e75e737f2b",
+    "DEPLOYMENT.md": "9d15ee22a81bf327b75dabab5fc0a6b031d91c7e91d80354fac56550939bb136",
+    "streamlit_app.py": "d7ad67f2c61232c492c88f0216889c44605984e4363802a6f8cd1e8964286313",
+    "portfolio_app/__init__.py": "eca73a44d4bce086e8970199e9b8e23197fac31ead0b96c469480a5bedac9695",
+    "portfolio_app/app.py": "f590276808e9d182fa15777410697f9f42a7ea308adf25a46c97e52a5b6b7e93",
+    "portfolio_app/data.py": "a1c85dd935121c99cc7ae7f0973889ef0f2a363ad495197c4890ddcc443eab42",
+    "portfolio_app/backtest.py": "9188c99146f1c993437fe182c33982bc289da351a92f91abeb96f97bb19799f6",
+    "portfolio_app/strategies.py": "f6c7d3435f3f16c405470270ba8793da0bc4faec6d6949a370613a3b04ab54a0",
+    "portfolio_app/sample_data/README.md": "82243db271cc3b77d2c62730c8ebe6031fa51d650aafccb4b279ef4829779aba",
+    "portfolio_app/sample_data/generate_demo_data.py": "4144bdd09c1e7f1889a4aebd895040f62bc4132580ce534dedc6c8c3fcf182ee",
+    "portfolio_app/sample_data/quant_demo_single_symbol.csv": "ea8c37bfc1dba577b0fc51c02b4b46b3437bbb66c016d116e965d8fdccb5a8eb",
+    "portfolio_app/sample_data/quant_demo_multi_symbol.csv": "293b62954c82ff5cbcfe48603ca266582d6fca80b3cffb0a5d117300a56055f5",
+    "tests/test_public_portfolio.py": "b4cc10e99e14e7977df14582afdac8164fbab81c467bad8e3c8b1a975fda20e1",
+    "requirements.txt": "d5a5f076e14952f2d98b15eced9815d7fad7afee088e0cc81b38bc319014946e",
+    "requirements-dev.txt": "3c3ad6730cf0c0417b77bae38e53c11fa8cd96a34f2f8956998bafc0aaf3ef17",
+    ".gitignore": "ce03869587f3ff9735c705db0eacbbdb26b107c6f56be478024d2e0639ea9143",
+    ".gitattributes": "705fd4d6451a31d36b3df7de96f83f30ac976c9b4a6d1e51671d8e2f33e2d0da",
+    "pytest.ini": "6c6ccf864e8f2d2e0223ee8e39bfde660c12435aa37d81e2b14000a6bee15003",
+    ".github/workflows/tests.yml": "376dea65b908fba47006c8c8ce5960cbed9c52434f64ea3b8fdab552b984222b"
+  }
+}
