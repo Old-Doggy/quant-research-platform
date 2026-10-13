@@ -1,14 +1,36 @@
-# Python 数据分析与研究工作台
+# Python Data Workbench
 
-以金融日线数据为案例的Python作品：文件导入、字段标准化、数据质量检查、通用示例策略、成本回测、组合分析和交互图表。展示数据分析、研究验证和工具开发能力，不宣称真实交易业绩。
+**A runnable Python portfolio project for financial data analysis, research workflows, and interactive visualization.**
 
-**本仓库不包含私人策略、重要研究参数、真实历史研究收益、模型权重、原始行情、账户或交易运行产物。** 三种策略仅为通用方法演示。示例数据完全合成，不需要券商、行情接口或密钥。
+**Language:** [简体中文](README.zh-CN.md) · English
 
-## 快速开始
+## Project Snapshot
 
-Python 3.12为基准运行版本。克隆或解压后进入本仓库根目录，安装需要能够访问Python包源。
+- **Positioning:** data analysis and research engineering portfolio
+- **Runtime:** Python 3.12 baseline
+- **Interface:** Streamlit dashboard
+- **Included data:** deterministic synthetic datasets
+- **Input formats:** CSV, Excel, and Parquet
+- **Public strategies:** trend following, mean reversion, and quality momentum
+- **Validation:** local tests and GitHub Actions on Ubuntu and Windows
+- **Safety boundary:** no private strategies, real research returns, raw market data, credentials, or trading runtime files
 
-Windows PowerShell：
+This project demonstrates an end-to-end workflow for daily market-style data:
+
+- import and normalize files;
+- check dates, prices, missing values, duplicates, and symbols;
+- generate interpretable strategy signals;
+- run a simple transaction-cost-aware backtest;
+- compare single-symbol and equal-weight multi-symbol portfolios; and
+- explore the results through interactive charts.
+
+It is a portfolio project, not a claim of trading performance or a production trading system.
+
+## Quick Start
+
+The bundled datasets are synthetic. No broker account, market-data API, or secret is required.
+
+### Windows PowerShell
 
 ```powershell
 py -3.12 -m venv .venv
@@ -16,7 +38,7 @@ py -3.12 -m venv .venv
 .\.venv\Scripts\python -m streamlit run streamlit_app.py
 ```
 
-macOS / Linux：
+### macOS or Linux
 
 ```bash
 python3.12 -m venv .venv
@@ -24,42 +46,83 @@ python3.12 -m venv .venv
 .venv/bin/python -m streamlit run streamlit_app.py
 ```
 
-无需激活环境。打开终端显示的本地地址，默认是 `http://localhost:8501`。首次启动直接显示带合成数据的分析界面。端口占用时增加 `--server.port 8517`。
+Open the local address printed by Streamlit, normally `http://localhost:8501`.
 
-## 页面
+To use another port:
 
-| 页面 | 内容 |
+```bash
+python -m streamlit run streamlit_app.py --server.port 8517
+```
+
+## Application Pages
+
+| Page | What to inspect |
 | --- | --- |
-| Quant Dashboard | K线与信号、策略与成本参数、单标的/等权组合、净值与回撤 |
-| 数据分析 | 数据摘要、逐标的收益与风险、标准化后的质量报告 |
-| 策略比较 | 同一输入下比较三种通用演示策略 |
-| 项目说明 | 模块范围、分析口径与限制 |
+| Quant Dashboard | Prices, indicators, signals, strategy parameters, costs, equity curves, and drawdowns |
+| 数据分析 | Data summaries, per-symbol return and risk statistics, and quality reports |
+| 策略比较 | Three demonstration strategies on the same input data |
+| 项目说明 | Scope, methodology notes, and limitations |
 
-三种策略为趋势跟踪、均值回归、质量动量。质量动量需要ROE/PB；缺失时保守处理，可能没有信号。公开页面不展示私人模型编号、收益摘要或下载链接。
+## Public Strategy Demos
 
-## 导入与示例
+1. **Trend following**
+2. **Mean reversion**
+3. **Quality momentum** using optional ROE and PB fields
 
-支持CSV、Excel（`.xlsx`/`.xls`）与Parquet。必需字段为 `trade_date, open, high, low, close`；支持日期、开盘、最高、最低、收盘等常见别名。多标的数据包含 `ts_code` 或 `symbol`，成交量、ROE、PB可选。
+The quality-momentum example handles missing fundamental fields conservatively. When the required fields are unavailable, it may produce no signal.
 
-`portfolio_app/sample_data/`包含单标的300条日线和4个合成标的。生成器可重复生成样例；样例收益没有投资含义。默认不访问外部数据源。
+## Import Your Own Data
 
-导入文件在当前会话中分析，应用不主动将上传文件保存到磁盘或加入仓库。不要把私人数据加入Git。公开服务器上传不等同于本机处理，敏感数据只在自己的本地实例分析。
+The application accepts:
 
-## 验证
+- CSV files;
+- Excel files (`.xlsx` and `.xls`); and
+- Parquet files.
 
-在同一环境安装测试依赖，再运行全部公开测试，无需私人数据：
+Required fields:
+
+```text
+trade_date, open, high, low, close
+```
+
+Common Chinese and English field aliases are normalized automatically. Multi-symbol files may include `ts_code` or `symbol`; `volume`, `roe`, and `pb` are optional.
+
+Uploaded files are analyzed in the current application session. The application does not intentionally save uploads to disk or add them to the repository. Use a local instance for sensitive data.
+
+## Demo Data
+
+`portfolio_app/sample_data/` contains deterministic synthetic data:
+
+- `quant_demo_single_symbol.csv`: 300 rows for charts, signals, and single-symbol backtests;
+- `quant_demo_multi_symbol.csv`: four synthetic symbols for alignment and equal-weight comparison; and
+- `generate_demo_data.py`: a standard-library generator for refreshing both datasets.
+
+These files are not downloaded market data and have no investment meaning.
+
+## Verification
+
+Install the development dependencies, then run:
 
 ```powershell
 .\.venv\Scripts\python -m pip install -r requirements-dev.txt
+.\.venv\Scripts\python -m pip check
 .\.venv\Scripts\python -m pytest
 ```
 
-macOS/Linux使用 `.venv/bin/python`。测试覆盖示例数据、CSV/Excel/Parquet导入、三种策略、组合、四个页面及公开边界。`.github/workflows/tests.yml`配置了Python 3.12/3.13在Windows/Linux的检查；远程CI是否通过以推送后的结果为准。
+On macOS or Linux, use `.venv/bin/python` instead. GitHub Actions checks Python 3.12 and 3.13 on Ubuntu and Windows.
 
-## 口径与限制
+## Methodology Notes
 
-信号滞后一行参与收盘到收盘收益计算，不模拟下一开盘成交；成本按持仓变化计入。组合是简化动态等权收益合成，未实现完整现金账户、权重再平衡成本、容量、涨跌停或停牌约束。
+- Signals are shifted by one row before close-to-close return calculation.
+- Trading costs are applied to changes in position.
+- The portfolio view uses a simplified dynamic equal-weight return combination.
+- The example does not model next-open execution, a full cash ledger, capacity, limit-up/limit-down rules, or suspension constraints.
+- Annualization uses 252 trading days.
+- The displayed Sharpe-style metric uses annualized compounded return divided by annualized volatility with a zero risk-free rate; it is not the arithmetic-mean Sharpe ratio.
+- The application does not place orders and does not guarantee profits.
 
-年化按252个交易日；页面夏普为年化复合收益除以年化波动（无风险取0），不是标准算术均值夏普。质量检查针对标准化后的数据，已删除的重复行和无效日期不计入异常数。
+## Public Scope and License
 
-应用不下单，不保证盈利。当前无线上Demo，项目许可证待所有者确认，未预设开源授权。部署范围见 `DEPLOYMENT.md`。`PUBLIC_MANIFEST.json`记录初始导出文件校验值，后续编辑需要重新审查和生成。
+The repository intentionally excludes private strategies, important research parameters, real historical research returns, model weights, raw market data, account information, broker or QMT files, and runtime artifacts. The included strategies and datasets are generic demonstrations only.
+
+No open-source license has been selected yet. Until a license is added, reuse and redistribution should not be assumed. See [`DEPLOYMENT.md`](DEPLOYMENT.md) for publishing and hosting boundaries.
