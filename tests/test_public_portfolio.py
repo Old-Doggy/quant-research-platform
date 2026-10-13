@@ -99,3 +99,29 @@ def test_invalid_import_is_reported():
     stream.name = "invalid.csv"
     with pytest.raises(ValueError, match="required columns"):
         read_market_file(stream)
+
+
+def test_public_app_uses_streamlit_default_page_icon():
+    source = (ROOT / "portfolio_app" / "app.py").read_text(encoding="utf-8")
+    assert 'page_icon="📊"' in source
+
+
+@pytest.mark.parametrize("page", ["Quant Dashboard", "数据分析", "策略比较"])
+def test_public_pages_process_uploaded_csv(page):
+    app = AppTest.from_file(str(ROOT / "portfolio_app" / "app.py"), default_timeout=30).run()
+    app.sidebar.radio[0].set_value(page).run()
+    source = next(control for control in app.sidebar.selectbox if control.label == "数据来源")
+    source.set_value("文件导入").run()
+    sample = SAMPLES / "quant_demo_multi_symbol.csv"
+    app.get("file_uploader")[0].upload(sample.name, sample.read_bytes(), "text/csv").run()
+    assert not app.exception
+    assert not app.get("error")
+
+
+def test_public_upload_error_is_displayed():
+    app = AppTest.from_file(str(ROOT / "portfolio_app" / "app.py"), default_timeout=30).run()
+    source = next(control for control in app.sidebar.selectbox if control.label == "数据来源")
+    source.set_value("文件导入").run()
+    app.get("file_uploader")[0].upload("invalid.csv", b"date,close\n20230103,100\n", "text/csv").run()
+    assert not app.exception
+    assert any("导入失败" in error.value for error in app.error)

@@ -6,7 +6,7 @@
     ".gitignore": "ce03869587f3ff9735c705db0eacbbdb26b107c6f56be478024d2e0639ea9143",
     "DEPLOYMENT.md": "716a4b3eabacab048b3d99fb07f9e1fcdc4d91d91c269f8673f1625468750aff",
     "portfolio_app/__init__.py": "eca73a44d4bce086e8970199e9b8e23197fac31ead0b96c469480a5bedac9695",
-    "portfolio_app/app.py": "f590276808e9d182fa15777410697f9f42a7ea308adf25a46c97e52a5b6b7e93",
+    "portfolio_app/app.py": "99463e201eae0a2d0cc174b9b1f06e907d7ef62c4cd1cae633f4409039075626",
     "portfolio_app/backtest.py": "9188c99146f1c993437fe182c33982bc289da351a92f91abeb96f97bb19799f6",
     "portfolio_app/data.py": "a1c85dd935121c99cc7ae7f0973889ef0f2a363ad495197c4890ddcc443eab42",
     "portfolio_app/sample_data/generate_demo_data.py": "4144bdd09c1e7f1889a4aebd895040f62bc4132580ce534dedc6c8c3fcf182ee",
@@ -20,6 +20,6 @@
     "requirements-dev.txt": "3c3ad6730cf0c0417b77bae38e53c11fa8cd96a34f2f8956998bafc0aaf3ef17",
     "requirements.txt": "d5a5f076e14952f2d98b15eced9815d7fad7afee088e0cc81b38bc319014946e",
     "streamlit_app.py": "d7ad67f2c61232c492c88f0216889c44605984e4363802a6f8cd1e8964286313",
-    "tests/test_public_portfolio.py": "b4cc10e99e14e7977df14582afdac8164fbab81c467bad8e3c8b1a975fda20e1"
+    "tests/test_public_portfolio.py": "bcef05753e3aa1c9b9623c7e45fab3ee3447e90e71b9dec0a2eee9bd1f396440"
   }
 }

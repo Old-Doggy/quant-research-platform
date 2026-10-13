@@ -169,7 +169,7 @@ def main() -> None:
             raise RuntimeError("The public package does not include the private local workbench.")
         runpy.run_path(str(local), run_name="__main__")
         return
-    st.set_page_config(page_title="Python Data Workbench", page_icon="Q", layout="wide")
+    st.set_page_config(page_title="Python Data Workbench", page_icon="📊", layout="wide")
     with st.sidebar:
         page = st.radio("页面", ["Quant Dashboard", "数据分析", "策略比较", "项目说明"])
     {"Quant Dashboard": render_dashboard, "数据分析": render_analysis, "策略比较": render_comparison, "项目说明": render_project}[page]()
