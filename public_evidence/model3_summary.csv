@@ -1,0 +1,2 @@
+model,evidence_case,asset_scope,status,status_label,period,annual_return,sharpe,max_drawdown,cost_assumption,source,limitations
+model3,all_oos,ETF/跨资产,validated,ETF/VAA正式WFO审计,2016-01-04至2026-04-30,0.1185647745,0.8823881906,-0.1401908612,正式审计口径未单独列出成本倍数,curated research summary,2022年度样本外为负；研究生成配置与运行时配置存在来源交易日差异；105组参数不能当作105次独立证据

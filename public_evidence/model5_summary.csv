@@ -1,0 +1,3 @@
+model,evidence_case,asset_scope,status,status_label,period,annual_return,sharpe,max_drawdown,cost_assumption,source,limitations
+model5,base_wfo,股票事件驱动,validated,PEAD正式WFO审计,2016-01-04至2026-05-07,0.2070220209,1.3302649594,-0.1349138350,正式审计基线成本,curated research summary,事件策略采用信息时点控制；公告时间不足时不能默认信号可得
+model5,stress_cost_x2,股票事件驱动,validated,PEAD正式WFO审计,2016-01-04至2026-05-07,0.1884860225,1.2112565466,-0.1370409620,综合成本2倍,curated research summary,审计结果应结合年度OOS、负对照和block bootstrap阅读

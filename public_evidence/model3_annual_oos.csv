@@ -1,0 +1,7 @@
+model,year,period_start,period_end,days,annual_return,sharpe,max_drawdown,ending_nav,evidence_case,status,status_label,cost_assumption,source,limitations
+model3,2022,2022-01-04,2022-12-30,242,-0.0640592474,-0.9989412810,-0.0829037408,0.9384028020,annual_oos,validated,ETF/VAA正式WFO审计,正式审计口径未单独列出成本倍数,curated research summary,2022年度样本外为负；研究生成配置与运行时配置存在来源交易日差异
+model3,2023,2023-01-03,2023-12-29,242,0.0880615743,0.8825338424,-0.0599986326,1.0844236245,annual_oos,validated,ETF/VAA正式WFO审计,正式审计口径未单独列出成本倍数,curated research summary,年度样本外结果应结合完整审计和参数稳定性阅读
+model3,2024,2024-01-02,2024-12-31,242,0.2714001566,2.1253350273,-0.0374325899,1.2593431251,annual_oos,validated,ETF/VAA正式WFO审计,正式审计口径未单独列出成本倍数,curated research summary,年度样本外结果应结合完整审计和参数稳定性阅读
+model3,2025,2025-01-02,2025-12-31,243,0.4095619819,2.6153084799,-0.0448606593,1.3923863039,annual_oos,validated,ETF/VAA正式WFO审计,正式审计口径未单独列出成本倍数,curated research summary,年度样本外结果应结合完整审计和参数稳定性阅读
+model3,2026,2026-01-05,2026-04-30,77,0.2784321934,1.6894684318,-0.0575858166,1.0779434140,annual_oos,validated,ETF/VAA正式WFO审计,正式审计口径未单独列出成本倍数,curated research summary,2026行是截至2026-04-30的不完整年度
+model3,ALL_OOS,2016-01-04,2026-04-30,2507,0.1185647745,0.8823881906,-0.1401908612,3.0486045159,all_oos,validated,ETF/VAA正式WFO审计,正式审计口径未单独列出成本倍数,curated research summary,正式网格包含105组参数；完整结论仍需查看负对照、bootstrap和配置来源限制

@@ -1,0 +1,4 @@
+model,evidence_case,asset_scope,status,status_label,period,annual_return,sharpe,max_drawdown,cost_assumption,source,limitations
+model7,selection_validation,多股票池组合,validated,组合选择验证摘要,原始选择摘要未披露回测起止日期；快照发布于2026-05-11,0.3033286626,1.7932778763,-0.0896556782,基线含交易成本但费率未披露；2倍成本年化0.2684096720,curated research summary,选择摘要与latest本地回测不是同一产物；不得用快照发布日期代替回测区间；不能作为实盘收益声明
+model7,latest_local_backtest,多股票池组合,validated,latest本地回测,2024-01-03至2026-05-08（564个交易日）,0.2889319904,1.7174841056,-0.0925247844,报告未单独列出成本倍数或具体费率,curated research summary,区间由同目录daily_curve核对；报告显示成本与WFO源行未匹配；不是独立正式审计
+model7,runtime_state,多股票池组合,runtime_only,运行状态层,快照发布于2026-05-11；历史目标执行日期止于2026-04-01,,,,不适用,curated research summary,仅保留目标文件类型和历史日期说明；不公开标的级持仓；无历史收益证据且不代表当日可执行状态

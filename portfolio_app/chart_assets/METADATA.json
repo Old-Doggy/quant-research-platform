@@ -1,0 +1,9 @@
+{
+  "package": "lightweight-charts",
+  "version": "4.2.0",
+  "license": "Apache-2.0",
+  "source": "https://github.com/tradingview/lightweight-charts/tree/v4.2.0",
+  "sha256": "46fc69534ec098f095bbcd1d9a26d693d39a8b9eeff7343536765b3dd28c2bdf",
+  "cdn_required": false,
+  "api_generation": "4.2"
+}

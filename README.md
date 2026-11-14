@@ -1,128 +1,63 @@
-# Python Data Workbench
+# 量化研究与可视化平台
 
-**A runnable Python portfolio project for financial data analysis, research workflows, and interactive visualization.**
+用图表完成从行情观察、因子分析到策略回测和组合研究的工作流。七个工作区共用一套数据与研究记录，参数、结果和图形可以连起来查看。
 
-**Language:** [简体中文](README.zh-CN.md) · English
+Python · Streamlit · Plotly · Lightweight Charts
 
-## Project Snapshot
+![行情与研究](docs/images/watch.png)
 
-- **Positioning:** data analysis and research engineering portfolio
-- **Runtime:** Python 3.12 baseline
-- **Interface:** Streamlit dashboard
-- **Included data:** deterministic synthetic datasets
-- **Input formats:** CSV, Excel, and Parquet
-- **Public strategies:** trend following, mean reversion, and quality momentum
-- **Validation:** local tests and GitHub Actions on Ubuntu and Windows
-- **Safety boundary:** no private strategies, real research returns, raw market data, credentials, or trading runtime files
+## 能做什么
 
-This project demonstrates an end-to-end workflow for daily market-style data:
-
-- import and normalize files;
-- check dates, prices, missing values, duplicates, and symbols;
-- generate interpretable strategy signals;
-- run a simple transaction-cost-aware backtest;
-- compare single-symbol and equal-weight multi-symbol portfolios; and
-- explore the results through interactive charts.
-
-It is a portfolio project, not a claim of trading performance or a production trading system.
-
-## Quick Start
-
-The bundled datasets are synthetic. No broker account, market-data API, or secret is required.
-
-### Windows PowerShell
-
-```powershell
-py -3.12 -m venv .venv
-.\.venv\Scripts\python -m pip install -r requirements.txt
-.\.venv\Scripts\python -m streamlit run streamlit_app.py
-```
-
-### macOS or Linux
-
-```bash
-python3.12 -m venv .venv
-.venv/bin/python -m pip install -r requirements.txt
-.venv/bin/python -m streamlit run streamlit_app.py
-```
-
-Open the local address printed by Streamlit, normally `http://localhost:8501`.
-
-To use another port:
-
-```bash
-python -m streamlit run streamlit_app.py --server.port 8517
-```
-
-## Application Pages
-
-| Page | What to inspect |
+| 工作区 | 用途 |
 | --- | --- |
-| Quant Dashboard | Prices, indicators, signals, strategy parameters, costs, equity curves, and drawdowns |
-| 数据分析 | Data summaries, per-symbol return and risk statistics, and quality reports |
-| 策略比较 | Three demonstration strategies on the same input data |
-| 项目说明 | Scope, methodology notes, and limitations |
+| 看盘 | 日、周、月 K 线，技术指标、成交量与研究事件联动 |
+| 因子 | 因子分布、横截面 Rank IC、分组收益与稳定性分析 |
+| 策略 | 配置信号、比较参数、查看成本与样本外验证 |
+| 组合 | 组合权重、现金、调仓、成交记录与收益贡献 |
+| 数据 | 导入文件、检查质量、登记版本，再进入研究 |
+| 实验 | 查看研究记录、比较运行结果、下载归档 |
+| 作品 | 按模型浏览研究方法、验证设计与历史净值 |
 
-## Public Strategy Demos
+## 运行
 
-1. **Trend following**
-2. **Mean reversion**
-3. **Quality momentum** using optional ROE and PB fields
+需要 Python 3.12 或 3.13。首次使用无需行情接口或密钥，内置合成数据可运行完整研究流程。
 
-The quality-momentum example handles missing fundamental fields conservatively. When the required fields are unavailable, it may produce no signal.
-
-## Import Your Own Data
-
-The application accepts:
-
-- CSV files;
-- Excel files (`.xlsx` and `.xls`); and
-- Parquet files.
-
-Required fields:
-
-```text
-trade_date, open, high, low, close
+```bash
+git clone https://github.com/Old-Doggy/quant-research-platform.git
+cd quant-research-platform
+python -m venv .venv
 ```
 
-Common Chinese and English field aliases are normalized automatically. Multi-symbol files may include `ts_code` or `symbol`; `volume`, `roe`, and `pb` are optional.
+Windows 激活环境：`.venv\Scripts\activate`；macOS / Linux：`source .venv/bin/activate`。
 
-Uploaded files are analyzed in the current application session. The application does not intentionally save uploads to disk or add them to the repository. Use a local instance for sensitive data.
-
-## Demo Data
-
-`portfolio_app/sample_data/` contains deterministic synthetic data:
-
-- `quant_demo_single_symbol.csv`: 300 rows for charts, signals, and single-symbol backtests;
-- `quant_demo_multi_symbol.csv`: four synthetic symbols for alignment and equal-weight comparison; and
-- `generate_demo_data.py`: a standard-library generator for refreshing both datasets.
-
-These files are not downloaded market data and have no investment meaning.
-
-## Verification
-
-Install the development dependencies, then run:
-
-```powershell
-.\.venv\Scripts\python -m pip install -r requirements-dev.txt
-.\.venv\Scripts\python -m pip check
-.\.venv\Scripts\python -m pytest
+```bash
+python -m pip install -r requirements.txt
+python -m streamlit run streamlit_app.py --server.address 127.0.0.1
 ```
 
-On macOS or Linux, use `.venv/bin/python` instead. GitHub Actions checks Python 3.12 and 3.13 on Ubuntu and Windows.
+打开终端给出的本地地址，默认是 `http://127.0.0.1:8501`。从“数据”导入自己的 CSV、Excel 或 Parquet，也可在“看盘”切换行情来源。
 
-## Methodology Notes
+![历史模型净值与回撤](docs/images/models.png)
 
-- Signals are shifted by one row before close-to-close return calculation.
-- Trading costs are applied to changes in position.
-- The portfolio view uses a simplified dynamic equal-weight return combination.
-- The example does not model next-open execution, a full cash ledger, capacity, limit-up/limit-down rules, or suspension constraints.
-- Annualization uses 252 trading days.
-- The displayed Sharpe-style metric uses annualized compounded return divided by annualized volatility with a zero risk-free rate; it is not the arithmetic-mean Sharpe ratio.
-- The application does not place orders and does not guarantee profits.
+## 数据
 
-## Public Scope and License
+仓库附带合成样例及作者授权公开的历史研究汇总，不附带真实行情库。真实行情可从数据服务商获取后导入，项目提供一个 Tushare 日线下载脚本。
 
-The repository intentionally excludes private strategies, important research parameters, real historical research returns, model weights, raw market data, account information, broker or QMT files, and runtime artifacts. The included strategies and datasets are generic demonstrations only.
+[数据获取与字段说明](docs/data.md) · [使用指南](docs/usage.md) · [研究计算口径](docs/methodology.md)
 
-No open-source license has been selected yet. Until a license is added, reuse and redistribution should not be assumed. See [`DEPLOYMENT.md`](DEPLOYMENT.md) for publishing and hosting boundaries.
+“作品”中的 11 条净值曲线来自既有历史回测，保留原样本区间与成本情景。模型 2、6 的未通过状态也保留在结果中。这些历史汇总不等于当前行情重跑或实盘收益。
+
+## 开发
+
+```bash
+python -m pip install -r requirements-dev.txt
+python -m pytest
+```
+
+[项目结构与技术说明](docs/architecture.md) · [测试与版本记录](docs/verification.md) · [第三方资源](docs/third-party.md)
+
+应用默认在本机运行，文件导入和本地目录读取面向单人研究使用。互联网部署需要另外配置访问控制与数据隔离。
+
+## 许可证
+
+代码与作者公开的研究汇总采用 [MIT](LICENSE) 许可证。Lightweight Charts 保留 Apache-2.0 许可证和 TradingView 署名。外部行情数据的使用与再分发遵循各数据提供方的条款。

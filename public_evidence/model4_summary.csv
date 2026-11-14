@@ -1,0 +1,2 @@
+model,evidence_case,asset_scope,status,status_label,period,annual_return,sharpe,max_drawdown,cost_assumption,source,limitations
+model4,t_minus_1_next_open_cost_x2,可转债,validated_with_limitations,T-1下一开盘执行审计,2024-01-03至2026-05-07,0.1353381491,0.7931904312,-0.2834115117,综合成本2倍,curated research summary,T-1尾盘代理在缺少历史14:50盘口时使用次日收盘代理；赎回风险依赖as-of公告日期过滤；存在交易约束拦截

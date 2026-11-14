@@ -1,0 +1,2 @@
+model,evidence_case,asset_scope,status,status_label,period,annual_return,sharpe,max_drawdown,cost_assumption,source,limitations
+model2,validation_summary,股票因子组合,review_required,股票池验证未通过门槛,原始摘要未披露回测起止日期；验证生成于2026-05-05,0.0510000000,0.2300000000,-0.1580000000,原始摘要未提供明确成本倍数,curated research summary,pass_gate=False；结果保留为研究证据；生成日期和来源交易日均不代表回测区间
