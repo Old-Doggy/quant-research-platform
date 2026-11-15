@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from .design_tokens import css_variables
 
 
 ASSET_ROOT = Path(__file__).resolve().parent / "chart_assets"
@@ -34,7 +35,7 @@ def chart_bridge_html(payload: dict[str, object], *, height: int = 760) -> str:
     )
     range_buttons += '<button data-bars="all">全部</button>'
     return f'''<!doctype html><html lang="zh-CN"><head><meta charset="utf-8">
-<style>:root {{ --chart-height: {height}px; }}\n{css}</style></head><body>
+<style>{css_variables()}\n:root {{ --chart-height: {height}px; }}\n{css}</style></head><body>
 <div id="chart" data-chart-engine="lightweight-charts">
 <div class="toolbar"><div class="periods">
 {range_buttons}

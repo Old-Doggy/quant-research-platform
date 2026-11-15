@@ -1,19 +1,18 @@
-:root{--q-bg:#F0F3F7;--q-text:#1C2D45;--q-muted:#52637B;--q-primary:#2864D7;--q-line:#D8E0EB;--q-font:"Segoe UI Variable","Segoe UI","Microsoft YaHei UI","Microsoft YaHei","PingFang SC",sans-serif}
-html,body,[data-testid="stApp"]{font-family:var(--q-font);color:var(--q-text);font-size:16px}
+html,body,[data-testid="stApp"]{font-family:var(--q-font);color:var(--q-text);font-size:var(--q-font-body)}
 [data-testid="stApp"] p,[data-testid="stApp"] label,[data-testid="stApp"] button,[data-testid="stApp"] input,[data-testid="stApp"] select,[data-testid="stApp"] h1,[data-testid="stApp"] h2,[data-testid="stApp"] h3{font-family:var(--q-font)!important}
 [data-testid="stAppViewContainer"],[data-testid="stMain"]{background:var(--q-bg)}
 [data-testid="stMain"] [data-testid="stMainBlockContainer"]{max-width:1840px!important;padding:3.8rem 1.4rem 2rem!important}
 [data-testid="stHeader"]{background:rgba(240,243,247,.97);height:2.6rem}
-[data-testid="stMain"] h1{font-family:var(--q-font);font-size:27px!important;letter-spacing:0;font-weight:650;padding-top:0;line-height:1.35}
+[data-testid="stMain"] h1{font-family:var(--q-font);font-size:var(--q-font-page-title)!important;letter-spacing:0;font-weight:650;padding-top:0;line-height:1.35}
 [data-testid="stMain"] h2{font-size:23px!important;line-height:1.5}
 [data-testid="stMain"] h3{font-size:19px!important;line-height:1.5}
 [data-testid="stMarkdownContainer"] p,[data-testid="stMarkdownContainer"] li{font-size:16px;line-height:1.75}
 [data-testid="stCaptionContainer"],[data-testid="stCaptionContainer"] p{font-size:14px!important;line-height:1.65;color:var(--q-muted)}
 [data-testid="stCaptionContainer"]{opacity:1!important}
 [data-testid="stMainBlockContainer"] [data-testid="stVerticalBlock"]{gap:.55rem}
-[data-testid="stWidgetLabel"] p{font-size:15px!important;font-weight:500}
+[data-testid="stWidgetLabel"] p{font-size:var(--q-font-toolbar)!important;font-weight:500}
 [data-baseweb="select"],[data-baseweb="input"],input,textarea{font-size:15px!important}
-[data-testid="stButton"] button,[data-testid="stDownloadButton"] button,[data-testid="stFormSubmitButton"] button{min-height:40px;border-radius:4px;font-size:15px;border-color:var(--q-line)}
+[data-testid="stButton"] button,[data-testid="stDownloadButton"] button,[data-testid="stFormSubmitButton"] button{min-height:40px;border-radius:var(--q-radius-control);font-size:var(--q-font-toolbar);border-color:var(--q-line)}
 [data-testid="stButton"] button p,[data-testid="stDownloadButton"] button p{font-size:15px!important}
 button[kind="primary"],button[kind="primaryFormSubmit"]{background:var(--q-primary);border-color:var(--q-primary);color:white}
 button[kind="primary"]:hover{background:#1D4FAA;border-color:#1D4FAA}
@@ -61,7 +60,7 @@ button[kind="primary"]:hover{background:#1D4FAA;border-color:#1D4FAA}
 [data-testid="stSidebar"] .quant-nav-footer{border-top:1px solid #354861;margin-top:28px;padding-top:18px;font-size:14px;color:#B0BED3;line-height:1.8}
 .quant-context-status{display:flex!important;flex-wrap:wrap!important;background:transparent!important;border:0!important;border-bottom:1px solid var(--q-line)!important;border-radius:0!important;padding:4px 0 10px!important;font-size:14px!important;line-height:1.65!important;gap:8px 22px!important;color:var(--q-text)!important}
 .quant-context-status br{display:none}.quant-context-status b{margin-right:7px}
-.quant-context-status span:last-child{display:none}
+.quant-context-status span[data-context-field="mode"]{display:none}
 [data-testid="stMetricValue"] *{font-size:26px!important;line-height:1.35!important;font-weight:600!important}
 [data-testid="stMainBlockContainer"] [data-testid="stCaptionContainer"] *{color:#52637B!important;font-size:14px!important;opacity:1!important}
 [data-testid="stSidebar"] [role="radiogroup"]>div{width:100%}
@@ -103,25 +102,25 @@ button[kind="primary"]:hover{background:#1D4FAA;border-color:#1D4FAA}
 [data-baseweb="select"]:has(input:disabled) * { cursor:not-allowed!important; }
 [role="listbox"] [role="option"], [role="listbox"] [role="option"] * { cursor:pointer!important; }
 
-/* Cool, restrained layers keep dense research pages readable. */
-[data-testid="stMain"] { background:linear-gradient(155deg,#edf2f9 0,#f4f6fa 55%,#eef2f7 100%); }
+/* Dense research views use one neutral canvas and semantic chart colors. */
+[data-testid="stMain"] { background:var(--q-bg); }
 [data-testid="stMain"] [data-testid="stMetric"] {
-  background:#fff;border:1px solid #dce4ef;border-radius:12px;
+  background:var(--q-surface);border:1px solid var(--q-line);border-radius:var(--q-radius-card);
   padding:12px 16px;box-shadow:0 3px 12px rgba(27,49,83,.035);
   border-top:3px solid #bed0ee;
 }
 [data-testid="stMain"] [data-testid="stMetric"]:hover { border-top-color:#5585d9; }
-[data-testid="stPlotlyChart"], [data-testid="stDataFrame"] { border-radius:12px;box-shadow:0 4px 16px rgba(27,49,83,.035); }
-[data-testid="stExpander"], [data-testid="stForm"] { border-radius:12px; }
-[data-testid="stVerticalBlockBorderWrapper"]>div { border-radius:12px; }
+[data-testid="stPlotlyChart"], [data-testid="stDataFrame"] { border-radius:var(--q-radius-chart);box-shadow:0 4px 16px rgba(27,49,83,.035); }
+[data-testid="stExpander"], [data-testid="stForm"] { border-radius:var(--q-radius-section); }
+[data-testid="stVerticalBlockBorderWrapper"]>div { border-radius:var(--q-radius-card); }
 [data-testid="stButton"] button,[data-testid="stDownloadButton"] button,
-[data-testid="stFormSubmitButton"] button,[data-testid="stPopover"] button { border-radius:9px; }
+[data-testid="stFormSubmitButton"] button,[data-testid="stPopover"] button { border-radius:var(--q-radius-control); }
 [data-testid="stMain"] [data-baseweb="select"]>div,
 [data-testid="stMain"] [data-baseweb="input"],
-[data-testid="stMain"] [data-baseweb="base-input"] { border-radius:9px; }
+[data-testid="stMain"] [data-baseweb="base-input"] { border-radius:var(--q-radius-control); }
 [data-testid="stMain"] [data-baseweb="select"]>div { background:#fff;border-color:#d4deed; }
 [data-testid="stMain"] [data-baseweb="select"]>div:hover { border-color:#8ba9d7; }
-.quant-context-status { background:rgba(255,255,255,.7)!important;padding:10px 14px!important;border:1px solid #dde5f0!important;border-radius:10px!important;margin-bottom:8px; }
+.quant-context-status { background:transparent!important;padding:4px 0 8px!important;border:0!important;border-bottom:1px solid var(--q-line)!important;border-radius:0!important;margin-bottom:0; }
 .dossier-card { border-radius:14px!important;border-top:3px solid #8eafe7!important;background:linear-gradient(110deg,#fff,#f8faff)!important;box-shadow:0 4px 16px rgba(27,49,83,.035); }
 [data-testid="stSidebar"] [data-testid="stRadio"] label[data-baseweb="radio"] { border-radius:10px; }
 [data-testid="stSidebar"] [data-testid="stRadio"] label[data-baseweb="radio"]:focus-within { outline:none; }
@@ -148,3 +147,20 @@ button[kind="primary"]:hover{background:#1D4FAA;border-color:#1D4FAA}
 @media(max-width:640px){.model-flow{grid-template-columns:1fr}.model-note{padding:16px}.model-explanation h3{font-size:19px}}
 
 .quant-brand-text{min-width:0;flex:1}.quant-brand-text strong{font-size:16px;line-height:1.4;white-space:normal;letter-spacing:0}.quant-brand small{font-size:10px;white-space:normal;letter-spacing:.2px}
+
+/* Streamlit 1.67 uses React Aria controls alongside existing BaseWeb widgets. */
+[data-testid="stSidebar"] [data-testid="stRadioOption"] {
+  width:100%;min-height:48px;padding:11px 15px;margin:0;border-radius:var(--q-radius-card);
+  color:#C6D1E3;cursor:pointer;box-sizing:border-box;
+}
+[data-testid="stSidebar"] [data-testid="stRadioOption"]>div>div:first-child{display:none}
+[data-testid="stSidebar"] [data-testid="stRadioOption"] p{color:#C6D1E3!important;font-size:16px!important}
+[data-testid="stSidebar"] [data-testid="stRadioOption"]:has(input:checked){background:var(--q-selected);box-shadow:inset 3px 0 #77A6FF}
+[data-testid="stSidebar"] [data-testid="stRadioOption"]:has(input:checked) p{color:white!important}
+[data-testid="stSidebar"] [data-testid="stRadioOption"]:hover{background:#1C304D}
+[data-testid="stSidebar"] [data-testid="stRadioOption"]:has(input:focus-visible){outline:2px solid #77A6FF;outline-offset:2px}
+[data-testid="stMain"] [role="combobox"]:not(input),[data-testid="stMain"] select{cursor:pointer}
+[data-testid="stSelectbox"] input[readonly]{cursor:pointer!important;caret-color:transparent}
+.quant-workspace-heading{margin:0 0 10px}.quant-workspace-heading p{color:var(--q-muted);font-size:var(--q-font-auxiliary)!important;margin:4px 0 0}
+[data-testid="stMain"] .st-key-strategy_parameters{background:var(--q-surface);border:1px solid var(--q-line);border-radius:var(--q-radius-card);padding:16px}
+@media(min-width:1280px){[data-testid="stMain"]:has(.st-key-strategy_parameters) [data-testid="stMainBlockContainer"]{padding-top:3rem!important}}

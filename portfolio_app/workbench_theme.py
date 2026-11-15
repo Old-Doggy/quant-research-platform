@@ -6,12 +6,13 @@ import plotly.io as pio
 import streamlit as st
 
 from .research_charts import FONT, PALETTE
+from .design_tokens import COLOR_TOKENS, FONT_SIZE_TOKENS, css_variables
 
 
 def apply_workbench_theme() -> None:
     # Default styling also reaches evidence charts without altering their data.
     template = go.layout.Template(pio.templates['plotly_white'])
-    template.layout.update(font=dict(family=FONT, size=14, color='#344763'),
+    template.layout.update(font=dict(family=FONT, size=FONT_SIZE_TOKENS['chart'], color=COLOR_TOKENS['text']),
         colorway=list(PALETTE), paper_bgcolor='#FFFFFF', plot_bgcolor='#FFFFFF',
         hoverlabel=dict(font=dict(family=FONT, size=14)),
         xaxis=dict(tickfont=dict(size=14), title=dict(font=dict(size=14)), automargin=True),
@@ -19,7 +20,7 @@ def apply_workbench_theme() -> None:
                    gridcolor='#E4EAF2'))
     pio.templates['quant_research'] = template
     pio.templates.default = 'quant_research'
-    st.html('<style>'+Path(__file__).with_name('workbench_theme.css').read_text(encoding='utf-8')+'</style>')
+    st.html('<style>'+css_variables()+'\n'+Path(__file__).with_name('workbench_theme.css').read_text(encoding='utf-8')+'</style>')
 
 
 def render_sidebar_brand() -> None:

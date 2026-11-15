@@ -7,7 +7,8 @@
     panes.textContent = payload.bars.length ? '图表引擎不可用' : '暂无可用行情';
     return;
   }
-  const up = '#dc474c', down = '#168a72';
+  const theme = getComputedStyle(document.documentElement);
+  const up = theme.getPropertyValue('--q-up').trim(), down = theme.getPropertyValue('--q-down').trim();
   const charts = [], seriesByPane = [], labels = [];
   const times = payload.bars.map(bar => bar.time);
   const barsByTime = new Map(payload.bars.map(bar => [bar.time, bar]));
@@ -20,6 +21,14 @@
   const storageKey = String(state.storage_key || 'quant-chart-state-v1:default');
   const format = value => Number.isFinite(value) ? value.toLocaleString('zh-CN', {maximumFractionDigits: Math.abs(value) > 0 && Math.abs(value) < .01 ? 8 : 4}) : '--';
   const publicEvents = Array.isArray(payload.events) ? payload.events : [];
+  // A fresh iframe must not reuse the previous mount's sequence numbers.
+  let selectionSequence = Date.now() * 1000;
+  function emitSelection(time, kind = 'date') {
+    if (!payload.selection_bridge || !barsByTime.has(time)) return;
+    window.parent.postMessage({type: 'quant:selection', version: 1, source: 'kline',
+      chart_id: payload.selection_bridge.chart_id, symbol: payload.symbol,
+      sequence: ++selectionSequence, date: time, kind}, '*');
+  }
   const eventById = new Map(publicEvents.map(event => [String(event.event_id), event]));
   const context = {is_realtime: false, ...(payload.data_context || {})};
   function pane(id, title, kind, last) {
@@ -37,7 +46,7 @@
     wrap.append(label, canvas); panes.appendChild(wrap);
     const chart = LightweightCharts.createChart(canvas, {
       width: Math.max(120, canvas.clientWidth), height: Math.max(40, canvas.clientHeight),
-      layout: {background: {color: '#ffffff'}, textColor: '#52637b', fontSize: 14, fontFamily: 'Segoe UI, Microsoft YaHei, sans-serif'},
+      layout: {background: {color: theme.getPropertyValue('--q-surface').trim()}, textColor: theme.getPropertyValue('--q-muted').trim(), fontSize: parseInt(theme.getPropertyValue('--q-font-chart'), 10), fontFamily: theme.getPropertyValue('--q-font').trim()},
       localization: {locale: 'zh-CN'},
       grid: {vertLines: {visible: false}, horzLines: {color: '#edf1f2'}},
       rightPriceScale: {minimumWidth: 76, borderColor: '#d8e0eb', scaleMargins: {top: 0.12, bottom: 0.08}},
@@ -182,9 +191,10 @@
     rows.forEach(([label, value]) => body.appendChild(detailRow(label, value)));
     drawer.setAttribute('aria-hidden', 'false');
   }
-  function showEventGroup(group) {
+  function showEventGroup(group, publish = true) {
     if (!group || !group.length) return;
     const first = group[0];
+    if (publish) emitSelection(first.effective_date || first.decision_date, 'event');
     const quantity = group.reduce((sum, event) => sum + (Number(event.quantity) || 0), 0);
     const ids = group.map(event => String(event.event_id));
     const evidence = first.evidence && typeof first.evidence === 'object' ? Object.keys(first.evidence).join('、') : '--';
@@ -260,7 +270,11 @@
       return;
     }
     const time = param && typeof param.time === 'string' ? param.time : null;
-    if (time) showEventGroup(eventGroups(publicEvents.filter(event => event.effective_date === time), true)[0] || []);
+    if (time) {
+      const group = eventGroups(publicEvents.filter(event => event.effective_date === time), true)[0] || [];
+      if (group.length) showEventGroup(group);
+      else emitSelection(time);
+    }
   });
   const reset = () => clampRange({from: Math.max(0, times.length - payload.zoom.initial_visible_bars), to: lastBar});
   document.querySelectorAll('[data-bars]').forEach(button => button.addEventListener('click', () => {
@@ -304,7 +318,7 @@
       candles.setMarkers(payload.markers);
       showEventGroup(eventGroups(publicEvents.filter(event =>
         event.effective_date === focusedTime && event.symbol === focusedEvent.symbol && event.side === focusedEvent.side
-      ), true)[0] || [focusedEvent]);
+      ), true)[0] || [focusedEvent], false);
     }
   }
 })();

@@ -5,8 +5,10 @@ import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-PALETTE = ('#2864D7', '#14949B', '#8A6BC6', '#C18A30', '#526C93', '#BE6173')
-FONT = 'Segoe UI, Microsoft YaHei, PingFang SC, sans-serif'
+from .design_tokens import CHART_PALETTE, COLOR_TOKENS, FONT_FAMILY, FONT_SIZE_TOKENS
+
+PALETTE = CHART_PALETTE
+FONT = FONT_FAMILY
 CHART_CONFIG = {
     'displaylogo': False, 'scrollZoom': False, 'responsive': True,
     'displayModeBar': 'hover',
@@ -20,8 +22,8 @@ def style_chart(figure: go.Figure, *, title: str = '', height: int = 360,
     """One font, interaction vocabulary and palette for analytical charts."""
     figure.update_layout(
         template='plotly_white', height=height,
-        title=dict(text=title, font=dict(size=18, color='#1C2D45'), x=.015, xanchor='left'),
-        font=dict(family=FONT, size=14, color='#344763'),
+        title=dict(text=title, font=dict(size=FONT_SIZE_TOKENS['section_title'], color=COLOR_TOKENS['text']), x=.015, xanchor='left'),
+        font=dict(family=FONT, size=FONT_SIZE_TOKENS['chart'], color=COLOR_TOKENS['text']),
         paper_bgcolor='#FFFFFF', plot_bgcolor='#FFFFFF', colorway=list(PALETTE),
         margin=dict(l=18, r=48, t=100 if title else 48, b=42),
         hovermode='x unified', dragmode='zoom', uirevision=revision,
@@ -53,14 +55,14 @@ def build_performance_chart(frame: pd.DataFrame, *, date: str = 'trade_date',
     fig = make_subplots(rows=2, cols=1, shared_xaxes=True, vertical_spacing=.08,
                         row_heights=[.73, .27])
     fig.add_trace(go.Scatter(x=frame[date], y=frame[nav], name=label, mode='lines',
-        line=dict(color='#2463D4', width=2.2), connectgaps=False,
+        line=dict(color=COLOR_TOKENS['primary'], width=2.2), connectgaps=False,
         hovertemplate='%{x|%Y-%m-%d}<br>'+label+' %{y:.4f}<extra></extra>'), row=1, col=1)
     if benchmark:
         fig.add_trace(go.Scatter(x=frame[date], y=frame[benchmark], name='同标的买入持有', mode='lines',
-            line=dict(color='#8A99AF', width=1.5), connectgaps=False,
+            line=dict(color=COLOR_TOKENS['benchmark'], width=1.5, dash='dash'), connectgaps=False,
             hovertemplate='%{x|%Y-%m-%d}<br>买入持有 %{y:.4f}<extra></extra>'), row=1, col=1)
     fig.add_trace(go.Scatter(x=frame[date], y=frame[drawdown], name='回撤', mode='lines',
-        line=dict(color='#B65A70', width=1.2), fill='tozeroy', fillcolor='rgba(182,90,112,.10)',
+        line=dict(color=COLOR_TOKENS['benchmark'], width=1.2), fill='tozeroy', fillcolor='rgba(104,120,141,.10)',
         connectgaps=False, hovertemplate='%{x|%Y-%m-%d}<br>回撤 %{y:.2%}<extra></extra>'), row=2, col=1)
     style_chart(fig, title='', height=480, revision=revision)
     fig.update_layout(margin=dict(l=18, r=70, t=62, b=38), hovermode='x unified',

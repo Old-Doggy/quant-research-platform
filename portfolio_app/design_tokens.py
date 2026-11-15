@@ -1,8 +1,4 @@
-"""Stable visual tokens for the v4 workbench prototypes.
-
-The token layer is intentionally independent from Streamlit and chart code.
-It defines the visual contract before any production page is migrated.
-"""
+"""Shared visual contract for the research terminal and embedded charts."""
 
 from __future__ import annotations
 
@@ -15,35 +11,55 @@ def _freeze(values: Mapping[str, object]) -> MappingProxyType:
 
 
 COLOR_TOKENS = _freeze({
-    "background": "#F7F8FA",
+    "background": "#F3F6FA",
     "surface": "#FFFFFF",
-    "text": "#263238",
-    "muted_text": "#59666F",
-    "divider": "#D8DEE4",
-    "primary": "#176B5B",
-    "research": "#3F6CB5",
-    "up": "#C93B45",
-    "down": "#16836C",
+    "text": "#1C2D45",
+    "muted_text": "#52637B",
+    "divider": "#D8E0EB",
+    "primary": "#2864D7",
+    "research": "#0D858D",
+    "purple": "#7559B4",
+    "benchmark": "#68788D",
+    "navigation": "#111D30",
+    "selected": "#233B61",
+    "up": "#C4424B",
+    "down": "#13816D",
     "warning": "#946C13",
 })
 
 FONT_SIZE_TOKENS = _freeze({
-    "body": 14,
-    "toolbar": 13,
-    "table": 13,
-    "page_title": 20,
-    "section_title": 15,
-    "price": 22,
-    "key_metric": 18,
+    "body": 16,
+    "toolbar": 15,
+    "table": 14,
+    "chart": 14,
+    "auxiliary": 13,
+    "page_title": 26,
+    "section_title": 18,
+    "price": 24,
+    "key_metric": 24,
 })
 
 RADIUS_TOKENS = _freeze({
-    "control": 4,
-    "section": 6,
-    "card": 6,
+    "control": 8,
+    "section": 10,
+    "card": 10,
+    "chart": 12,
 })
 
-SPACING_TOKENS = (4, 8, 12, 16, 24)
+SPACING_TOKENS = (4, 8, 12, 16, 24, 32)
+
+FONT_FAMILY = 'Segoe UI Variable, Segoe UI, Microsoft YaHei UI, Microsoft YaHei, PingFang SC, sans-serif'
+CHART_PALETTE = tuple(COLOR_TOKENS[key] for key in ('primary', 'research', 'purple', 'benchmark', 'down', 'up'))
+
+
+def css_variables() -> str:
+    """Serialize the canonical contract for parent and iframe documents."""
+    aliases = {'background': 'bg', 'muted_text': 'muted', 'divider': 'line'}
+    values = [(f'--q-{aliases.get(key, key.replace("_", "-"))}', value) for key, value in COLOR_TOKENS.items()]
+    values.extend((f'--q-font-{key.replace("_", "-")}', f'{value}px') for key, value in FONT_SIZE_TOKENS.items())
+    values.extend((f'--q-radius-{key}', f'{value}px') for key, value in RADIUS_TOKENS.items())
+    values.append(('--q-font', FONT_FAMILY))
+    return ':root{' + ';'.join(f'{key}:{value}' for key, value in values) + '}'
 
 UI_TOKENS = _freeze({
     **COLOR_TOKENS,
@@ -104,12 +120,12 @@ def validate_design_tokens(overrides: Mapping[str, object] | None = None) -> lis
 
     spacing = values.get("spacing", SPACING_TOKENS)
     if spacing != SPACING_TOKENS:
-        errors.append("spacing must use the fixed 4/8/12/16/24 scale")
+        errors.append("spacing must use the fixed 4/8/12/16/24/32 scale")
     radius = values.get("radius", RADIUS_TOKENS)
     if not isinstance(radius, Mapping):
         errors.append("radius must be a mapping")
-    elif any(not isinstance(value, int) or value < 0 or value > 8 for value in radius.values()):
-        errors.append("radius values must be integer pixels between 0 and 8")
+    elif any(type(value) is not int or value < 0 or value > 12 for value in radius.values()):
+        errors.append("radius values must be integer pixels between 0 and 12")
     font_sizes = values.get("font_size", FONT_SIZE_TOKENS)
     if not isinstance(font_sizes, Mapping):
         errors.append("font_size must be a mapping")
