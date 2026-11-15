@@ -26,3 +26,9 @@ def render_provider_status():
             st.caption(f"{labels[row['capability']]} · {statuses.get(row['status'], '待检查')}")
         st.markdown('[数据配置说明](https://tushare.pro/document/1?doc_id=39)')
         st.caption('腾讯原始日线 · 沪深及北交小样本已检查，自动备用待跨源核对。')
+        free_labels = {'sina':'新浪','eastmoney':'东方财富','baostock':'BaoStock'}
+        free_statuses = {'sample_verified':'小样本已检查','rate_limited':'最近检查限流','dependency_missing':'未安装可选采集组件'}
+        for row in capabilities:
+            if row['provider'] in free_labels:
+                status = row['access_status'] if row['access_status']=='dependency_missing' else row['last_check_status']
+                st.caption(f"{free_labels[row['provider']]} · {free_statuses[status]}（2026-11-15）· 自动备用待验证")

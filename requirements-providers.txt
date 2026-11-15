@@ -1,0 +1,4 @@
+# Optional raw daily collectors. Keep the application environment versions fixed.
+-r requirements.txt
+akshare==1.20.64
+baostock==0.9.4

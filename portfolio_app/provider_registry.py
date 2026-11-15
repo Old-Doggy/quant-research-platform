@@ -19,9 +19,19 @@ def provider_capabilities():
             ('price_limits', 'https://tushare.pro/document/2?doc_id=183'),
             ('index_daily', 'https://tushare.pro/document/2?doc_id=95')]]
     rows.append(dict(provider='tencent', upstream='Tencent Finance', capability='a_daily_raw',
-        credential_status='not_required', access_status='sample_verified', implementation='adapter_ready',
+        credential_status='not_required', access_status='not_probed', implementation='adapter_ready',
+        last_check_status='sample_verified',
         live_verified=False, sample_verified_on='2026-11-15', automatic_fallback=False,
         source_url='https://akshare.akfamily.xyz/data/stock/stock.html'))
+    from importlib.util import find_spec
+    for provider, upstream, package, status in [('sina','Sina Finance','akshare','sample_verified'),
+            ('eastmoney','Eastmoney','akshare','rate_limited'),('baostock','BaoStock','baostock','sample_verified')]:
+        installed = find_spec(package) is not None
+        rows.append(dict(provider=provider,upstream=upstream,capability='a_daily_raw',
+            credential_status='not_required',implementation='adapter_ready',
+            access_status='not_probed' if installed else 'dependency_missing',last_check_status=status,live_verified=False,
+            sample_verified_on='2026-11-15',automatic_fallback=False,
+            source_url='http://www.baostock.com' if provider=='baostock' else 'https://akshare.akfamily.xyz/data/stock/stock.html'))
     return rows
 
 
