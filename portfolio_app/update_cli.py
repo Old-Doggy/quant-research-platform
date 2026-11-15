@@ -11,11 +11,17 @@ from .update_store import UpdateBusy
 
 
 def execute(request):
-    if not isinstance(request,dict) or set(request)-{'root','symbols','start','end','dataset_id','resume_plan'}:
+    if not isinstance(request,dict) or set(request)-{'root','symbols','start','end','dataset_id','resume_plan','schedule'}:
         raise ValueError('更新请求字段无效')
     root=request['root']
     if not isinstance(root,str) or not root:
         raise ValueError('更新目录无效')
+    if 'schedule' in request:
+        if request['schedule']!='daily_raw' or set(request)-{'root','symbols','start','dataset_id','schedule'}:
+            raise ValueError('自动更新仅支持明确起点的原始日线')
+        from .update_schedule import scheduled_daily
+        return scheduled_daily(root,symbols=request['symbols'],start=request['start'],
+            dataset_id=request.get('dataset_id','free-a-daily'))
     with process_lock(Path(root)/'locks'/'free-refresh.lock'):
         if 'resume_plan' in request:
             if set(request)!={'root','resume_plan'}:
@@ -45,7 +51,7 @@ def main():
             report=dict(status='failed',error_code='local_or_network_error')
         _atomic_write_json(Path(args.result),report)
     print(json.dumps(dict(status=report['status']),ensure_ascii=False))
-    return 0 if report['status'] in {'published','no_sessions'} else 1
+    return 0 if report['status'] in {'published','no_sessions','already_current'} else 1
 
 
 if __name__=='__main__':

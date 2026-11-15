@@ -26,11 +26,7 @@ if ($requestPath.Contains('"') -or $resultPath.Contains('"')) {
 }
 $arguments = '-m portfolio_app.update_cli --request "{0}" --result "{1}"' -f $requestPath, $resultPath
 $action = New-ScheduledTaskAction -Execute $pythonPath -Argument $arguments -WorkingDirectory $projectRoot
-# Windows task time uses the host timezone. Translate the Shanghai daily close window.
-$zone = [TimeZoneInfo]::FindSystemTimeZoneById('China Standard Time')
-$localNow = Get-Date
-$shanghaiToday = [TimeZoneInfo]::ConvertTime($localNow, $zone).Date.AddHours(18).AddMinutes(30)
-$hostTime = [TimeZoneInfo]::ConvertTime($shanghaiToday, $zone, [TimeZoneInfo]::Local)
-$trigger = New-ScheduledTaskTrigger -Daily -At $hostTime
+# The worker decides the Shanghai window; hourly wakeups survive host DST changes.
+$trigger = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1) -RepetitionInterval (New-TimeSpan -Hours 1)
 $settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -MultipleInstances IgnoreNew -ExecutionTimeLimit (New-TimeSpan -Hours 2)
 Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $trigger -Settings $settings -Description '量化研究平台：指定范围日频数据更新' -Force
