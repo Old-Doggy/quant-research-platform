@@ -24,6 +24,11 @@ def render_market_watch(route, dependencies):
     if dependencies['PUBLIC_MODE']:
         return False
     store=SnapshotStore(state_root()/'market_service')
+    if (route.context.snapshot_id and (route.context.dataset_id=='free-a-daily'
+            or (store.directory/route.context.dataset_id/'current.json').exists())
+            and not (store.directory/(route.context.snapshot_id+'.json')).exists()):
+        st.error('链接指定的行情版本在本机不存在，请恢复该版本或在数据中心重新选择。')
+        return True
     explicit=route.context.snapshot_id is not None and (store.directory/(route.context.snapshot_id+'.json')).exists()
     available=any(store.directory.glob('snapshot-*.json'))
     if not available and not explicit:
@@ -38,7 +43,7 @@ def render_market_watch(route, dependencies):
         st.session_state['_market_watch_route']=marker
     if 'watch_view' not in st.session_state:
         st.session_state['watch_view']=st.session_state.get('_watch_view_preference','现有数据')
-    mode=st.segmented_control('行情视图',['现有数据','更新行情'],key='watch_view',default='现有数据')
+    mode=st.segmented_control('行情视图',['现有数据','更新行情'],key='watch_view')
     st.session_state['_watch_view_preference']=mode
     if mode!='更新行情':
         return False
@@ -90,6 +95,9 @@ def render_market_watch(route, dependencies):
             columns=['symbol','ts_code','trade_date','open','high','low','close','vol','volume','amount','pre_close'])
     except (ValueError,OSError,KeyError):
         st.error('该版行情批次缺失或校验失败，请在数据中心检查。')
+        return True
+    if frame.empty:
+        st.info('所选证券在此版没有日线记录，请查看数据中心的覆盖状态。')
         return True
     from .research_dataset import record_context
     frame.attrs['research_dataset'].update(source_kind='provider_snapshot',version=f"v{manifest['generation']}",

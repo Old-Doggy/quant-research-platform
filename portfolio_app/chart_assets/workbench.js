@@ -95,7 +95,8 @@
   for (const indicator of overlayGroups) {
     for (const series of indicator.series) addSeries(chart, series, 0, false);
   }
-  const volumeChart = pane('volume-pane', '成交量 · 原始单位', 'volume', !panelGroups.length);
+  const volumeUnit = String(context.volume_unit || 'unknown');
+  const volumeChart = pane('volume-pane', '成交量 · ' + (volumeUnit === 'unknown' ? '源单位' : volumeUnit), 'volume', !panelGroups.length);
   const volume = volumeChart.addHistogramSeries({priceFormat: {type: 'volume'}, priceLineVisible: false, lastValueVisible: false});
   volume.setData(times.map(time => volumeByTime.get(time) || {time}));
   seriesByPane[1].push({series: volume, name: 'VOL', values: new Map(payload.volume.map(item => [item.time, item.value])), color: '#52636c'});

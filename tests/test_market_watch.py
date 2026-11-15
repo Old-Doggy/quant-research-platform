@@ -63,3 +63,18 @@ def test_browsing_context_does_not_reuse_strategy_or_change_previous_context():
     assert original.strategy_id=='trend'
     assert selected.dataset_generation==2
     assert selected.context_id!=original.context_id
+
+
+def test_missing_pinned_market_version_does_not_fall_back_to_synthetic(tmp_path,monkeypatch):
+    from portfolio_app.workspace_router import encode_route_query,build_workspace_state
+    from portfolio_app.research_context import ResearchContext
+    monkeypatch.setenv('PORTFOLIO_STATE_DIR',str(tmp_path))
+    monkeypatch.setenv('PORTFOLIO_MODE','local')
+    context=ResearchContext(dataset_id='free-a-daily',workspace='watch',symbol='600000.SH',
+        as_of='2025-01-02',snapshot_id='snapshot-'+'a'*64,dataset_generation=1,price_basis='raw')
+    view=app()
+    view.query_params.update(encode_route_query(build_workspace_state(context)))
+    view.run()
+    assert not view.exception
+    assert any('本机不存在' in item.value for item in view.error)
+    assert 'dashboard_source' not in view.session_state

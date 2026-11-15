@@ -8,6 +8,20 @@ from portfolio_app.chart_bridge import chart_bridge_html, local_asset_status, _r
 from portfolio_app.data_catalog import generate_seeded_baseline
 
 
+def test_short_chart_does_not_draw_incomplete_indicator_windows():
+    frame = generate_seeded_baseline(sessions=60, seed=2026).loc[lambda d:d.symbol.eq('DEMO_TREND')].head(40)
+    config=[{'key':'MA','params':{'period':20}}, {'key':'BOLL','params':{'period':20}}, {'key':'MACD'}]
+    short=build_ohlcv_payload(frame.head(3),symbol='DEMO_TREND',min_visible_bars=1,indicator_config=config)
+    assert all(not series['data'] for indicator in short['indicators'] for series in indicator['series'])
+    full=build_ohlcv_payload(frame,symbol='DEMO_TREND',indicator_config=config)
+    assert full['indicators'][0]['series'][0]['data'][0]['time']==frame.trade_date.iloc[19].strftime('%Y-%m-%d')
+    expected=float(frame.close.iloc[:20].mean())
+    assert full['indicators'][0]['series'][0]['data'][0]['value']==pytest.approx(expected)
+    macd=full['indicators'][2]['series']
+    assert macd[0]['data'][0]['time']==frame.trade_date.iloc[25].strftime('%Y-%m-%d')
+    assert macd[1]['data'][0]['time']==frame.trade_date.iloc[33].strftime('%Y-%m-%d')
+
+
 def test_payload_is_sorted_and_exposes_data_derived_zoom_bounds():
     frame = generate_seeded_baseline(sessions=520, seed=2026)
     frame = frame.loc[frame["symbol"].eq("DEMO_TREND")].sample(frac=1, random_state=3)

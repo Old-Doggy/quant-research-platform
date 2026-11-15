@@ -197,10 +197,11 @@ def _indicator_payload(frame: pd.DataFrame, symbol: str, as_of: object | None, c
 
     def points(column: str) -> list[dict[str, object]]:
         values = pd.to_numeric(calculated[column], errors="coerce")
+        minimum = _chart_warmup(selection, column)
         return [
             {"time": timestamp.strftime("%Y-%m-%d"), "value": float(value)}
-            for timestamp, value in zip(calculated["trade_date"], values)
-            if pd.notna(timestamp) and pd.notna(value)
+            for offset, (timestamp, value) in enumerate(zip(calculated["trade_date"], values))
+            if offset + 1 >= minimum and pd.notna(timestamp) and pd.notna(value)
         ]
 
     output: list[dict[str, object]] = []
@@ -293,6 +294,20 @@ def _indicator_payload(frame: pd.DataFrame, symbol: str, as_of: object | None, c
             continue
         output.append({"key": key, "pane": "overlay" if key in {"MA", "EMA", "BOLL", "VWAP", "DONCHIAN"} else "panel", "label": label, "params": params, "data": series[0]["data"], "series": series})
     return output
+
+
+def _chart_warmup(selection, column):
+    """Display eligibility only; keep existing research formulas unchanged."""
+    key, params = selection['key'], selection['params']
+    if key == 'MACD':
+        return params['slow'] + (params['signal']-1 if column!='macd' else 0)
+    if key == 'KDJ':
+        return params['period'] + params['smooth']-1 + (params['smooth']-1 if column in {'d','j'} else 0)
+    if key == 'DMI':
+        return 2*params['period']-1 if column.startswith('adx') else params['period']
+    if key in {'RSI','ROC','VOLUME_RATIO'}:
+        return params['period']+1
+    return params.get('period', 1)
 
 
 def _period_info(period: str, frame: pd.DataFrame, symbol: str, as_of: object | None) -> dict[str, object]:
