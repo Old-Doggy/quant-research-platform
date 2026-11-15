@@ -37,9 +37,14 @@ def _sdk_frame(name, symbol, start, end):
     if login.error_code != '0':
         raise ProviderError('login_failed', 'BaoStock登录失败')
     try:
-        result = bs.query_history_k_data_plus(market.lower()+'.'+code,
-            'date,code,open,high,low,close,volume,amount,adjustflag,tradestatus',
-            start_date=start, end_date=end, frequency='d', adjustflag='3')
+        if name == 'baostock_master':
+            result = bs.query_stock_basic(code=market.lower()+'.'+code)
+        elif name == 'baostock_calendar':
+            result = bs.query_trade_dates(start_date=start,end_date=end)
+        else:
+            result = bs.query_history_k_data_plus(market.lower()+'.'+code,
+                'date,code,open,high,low,close,volume,amount,adjustflag,tradestatus',
+                start_date=start, end_date=end, frequency='d', adjustflag='3')
         rows = []
         while result.error_code == '0' and result.next():
             rows.append(result.get_row_data())
@@ -56,7 +61,9 @@ class FreeDailyProvider:
             raise ValueError('未知免费上游')
         self.name, self._transport = name, transport
 
-    def _fetch(self, symbol, start, end):
+    def _fetch(self, symbol, start, end, *, operation=None):
+        if operation is not None and (self.name != 'baostock' or operation not in {'baostock_master','baostock_calendar'}):
+            raise ValueError('未知参考数据操作')
         if self._transport:
             try:
                 return self._transport(symbol=symbol, start=start, end=end)
@@ -74,7 +81,7 @@ class FreeDailyProvider:
                 with tempfile.TemporaryDirectory(prefix='quant-provider-') as directory:
                     output = Path(directory) / 'result.parquet'
                     command = [sys.executable, '-m', 'portfolio_app.providers.free_sdk', '--worker',
-                               self.name, symbol, start, end, str(output)]
+                               operation or self.name, symbol, start, end, str(output)]
                     try:
                         result = subprocess.run(command, capture_output=True, timeout=45,
                             creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == 'win32' else 0)
