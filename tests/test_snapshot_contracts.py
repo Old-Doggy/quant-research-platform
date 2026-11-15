@@ -13,7 +13,9 @@ def test_action_rule_calendar_and_snapshot_metadata_all_change_input_identity():
     calendar = build_session_calendar(frame.trade_date.tolist(), calendar_id='test', market='US', timezone='UTC')
     for key, value in [('corporate_actions', [action()]), ('instrument_rules', [dated_rule()]),
                        ('session_calendar', calendar), ('snapshot', {'snapshot_id': 'one', 'generation': 1}),
-                       ('return_contract', {'definition': 'total_return_v1'})]:
+                       ('return_contract', {'definition': 'total_return_v1'}),
+                       ('field_units', {'volume': 'shares'}),
+                       ('normalization', {'profile': 'tushare_a_daily', 'version': '1.0'})]:
         changed = frame.copy(deep=True)
         changed.attrs[key] = value
         assert build_data_fingerprint(changed) != original, key
