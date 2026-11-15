@@ -553,7 +553,13 @@ def _render_pure_stock_view(
         ),
     )
     chart_height = 520 + 126 * panel_count
-    components.html(chart_bridge_html(payload, height=chart_height), height=chart_height, scrolling=False)
+    from .chart_component import render_interactive_chart
+    selection = render_interactive_chart(payload, height=chart_height, key='watch_price')
+    if selection:
+        picked = display_frame.loc[pd.to_datetime(display_frame['trade_date']).dt.strftime('%Y-%m-%d').eq(selection['date'])]
+        if not picked.empty:
+            selected_bar = picked.iloc[0]
+            st.caption(f"图上选择 {selection['date']} · 收盘 {format_metric(number(selected_bar.get('close')))}")
     st.caption(f"{market_window['bars']:,} 根{period_label}" + (f" · {incomplete} 个周期未完成" if incomplete else ''))
     st.subheader("最近行情")
     table = build_stock_quote_table(display_frame)

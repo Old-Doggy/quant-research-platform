@@ -1,0 +1,24 @@
+<!doctype html><html><head><meta charset="utf-8"><style>html,body{margin:0;width:100%;overflow:hidden}iframe{width:100%;border:0;display:block}</style></head><body><iframe title="交互行情图表" sandbox="allow-scripts allow-same-origin allow-popups allow-downloads"></iframe><script>
+const iframe=document.querySelector('iframe');
+let currentId='', lastSequence=0;
+function send(type, extra={}) { window.parent.postMessage({isStreamlitMessage:true,type,...extra}, '*'); }
+window.addEventListener('message', event => {
+  const msg=event.data;
+  if (!msg || typeof msg!=='object') return;
+  if (event.source===window.parent && msg.type==='streamlit:render') {
+    const args=msg.args;
+    if (!args || typeof args.html!=='string') return;
+    if (currentId!==args.chart_id) {
+      currentId=args.chart_id; lastSequence=0;
+      iframe.srcdoc=args.html;
+    }
+    iframe.style.height=Number(args.height)+'px';
+    send('streamlit:setFrameHeight', {height:Number(args.height)});
+  } else if (event.source===iframe.contentWindow && msg.type==='quant:selection' && msg.chart_id===currentId) {
+    if (!Number.isSafeInteger(msg.sequence) || msg.sequence<=lastSequence) return;
+    lastSequence=msg.sequence;
+    send('streamlit:setComponentValue', {value:msg, dataType:'json'});
+  }
+});
+send('streamlit:componentReady', {apiVersion:1});
+</script></body></html>

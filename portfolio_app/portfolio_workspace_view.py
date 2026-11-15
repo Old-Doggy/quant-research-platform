@@ -237,15 +237,21 @@ def _render_portfolio_workspace(frame, *, context_id, public_mode):
             curve["drawdown"] = curve.nav / curve.nav.cummax() - 1
             curve = envelope_sample(curve, value='nav')
             def select_chart_date():
+                from .chart_events import accept_chart_event, plotly_date_event
                 event = st.session_state.get("portfolio_nav", {})
-                points = event.get("selection", {}).get("points", [])
-                if points and str(points[0].get("x", ""))[:10] in dates:
-                    st.session_state["portfolio_date"] = str(points[0]["x"])[:10]
+                previous = st.session_state.get('_portfolio_chart_event', {})
+                sequence = previous.get('sequence', 0) if previous.get('chart_id') == run_id else 0
+                selected_event = plotly_date_event(event, chart_id=run_id, symbol='portfolio', sequence=sequence + 1)
+                accepted = accept_chart_event(selected_event, chart_id=run_id, symbol='portfolio', dates=set(dates), last_sequence=sequence)
+                if accepted:
+                    st.session_state['_portfolio_chart_event'] = accepted
+                    st.session_state["portfolio_date"] = accepted['date']
             fig = build_performance_chart(curve, nav='unit_nav', label='账户净值',
                 title='账户净值与回撤', revision=f'portfolio-{run_id}')
             # Plotly emits point-selection events only for marker-enabled traces.
             # Keep the curve clean while retaining a seven-pixel click target.
             fig.data[0].update(mode='lines+markers', marker=dict(size=7, opacity=0))
+            fig.update_layout(clickmode='event+select')
             st.plotly_chart(fig, width="stretch", key="portfolio_nav", on_select=select_chart_date,
                 selection_mode="points", config=CHART_CONFIG)
             st.caption(f"研究日期 {date} · 点击曲线定位持仓日期")
