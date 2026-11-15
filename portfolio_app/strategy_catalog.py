@@ -5,6 +5,36 @@ from collections.abc import Mapping, Sequence
 from typing import Any
 
 from .strategies import STRATEGIES
+from .research_integrity import audit_research_input, IntegrityViolation
+import pandas as pd
+import numpy as np
+
+
+def strategy_input_fields(strategy_key):
+    """Raw dependencies, excluding indicators calculated by the strategy itself."""
+    strategy = next((item for item in STRATEGIES if item.key == strategy_key), None)
+    if strategy is None:
+        raise ValueError('unknown strategy: ' + str(strategy_key))
+    derived = {'ma20', 'ma60', 'rolling_std20', 'zscore20', 'ret60'}
+    return tuple(field for field in strategy.required_features if field not in derived)
+
+
+def audit_strategy_input(frame, strategy_key):
+    fields = strategy_input_fields(strategy_key)
+    missing = [field for field in fields if field not in frame
+               or not np.isfinite(pd.to_numeric(frame[field], errors='coerce')).any()]
+    if missing:
+        raise IntegrityViolation('策略缺少有效字段：' + '、'.join(missing))
+    return audit_research_input(frame, feature_fields=fields)
+
+
+def strategy_input_status(frame, strategy_key):
+    try:
+        audit_strategy_input(frame, strategy_key)
+    except IntegrityViolation as exc:
+        return dict(can_run=False, message=str(exc),
+                    action='请到数据中心补充所需字段及其可用时点，或选择价量策略。')
+    return dict(can_run=True, message='', action='')
 
 
 _EVIDENCE_STATUSES = {"validated", "validated_with_limitations", "review_required", "unavailable"}

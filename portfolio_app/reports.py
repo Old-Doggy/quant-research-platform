@@ -7,6 +7,7 @@ import pandas as pd
 from portfolio_app.backtest import run_backtest
 from portfolio_app.research import run_portfolio_research
 from portfolio_app.strategies import STRATEGIES, generate_signal
+from .strategy_catalog import strategy_input_status
 
 
 REPORT_COLUMNS = [
@@ -114,6 +115,12 @@ def build_strategy_comparison(
     """Compare demo strategies under the same scenario grid."""
     rows: list[dict[str, object]] = []
     for strategy_key in strategy_keys:
+        readiness = strategy_input_status(frame, strategy_key)
+        if not readiness['can_run']:
+            rows.append(dict(strategy_key=strategy_key, strategy_name=_strategy_name(strategy_key),
+                status='data_blocked', reason=readiness['message'], annual_return=None,
+                sharpe=None, max_drawdown=None, trades=None, stability_label='数据待补充'))
+            continue
         report = build_robustness_report(
             frame,
             strategy_key,
@@ -126,6 +133,8 @@ def build_strategy_comparison(
             {
                 "strategy_key": strategy_key,
                 "strategy_name": _strategy_name(strategy_key),
+                'status': 'available',
+                'reason': '',
                 "annual_return": summary["annual_return_median"],
                 "sharpe": float(report["sharpe"].median()) if not report.empty else 0.0,
                 "max_drawdown": summary["max_drawdown_worst"],

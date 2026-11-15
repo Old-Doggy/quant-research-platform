@@ -138,6 +138,9 @@ def generate_signal(
     if strategy_key == "mean_reversion" and "entry_zscore" not in raw_params:
         raw_params["entry_zscore"] = threshold
     params = normalize_strategy_params(strategy_key, raw_params)
+    # Also protect direct callers such as validation, reports and replay.
+    from .strategy_catalog import audit_strategy_input
+    audit_strategy_input(frame, strategy_key)
     if strategy_key == "mean_reversion" and "entry_zscore" not in params:
         params["entry_zscore"] = threshold
     result = add_features(frame, params=params)

@@ -80,16 +80,18 @@ class FactorResearchJobService:
             queued = self.coordinator.create_job(key)
             return self.coordinator.cancel(queued.job_id)
 
+        selected = next(spec for spec in self.specs if spec.factor_id == config.factor_id)
+
         try:
-            audit_research_input(frame)
+            audit_research_input(frame, feature_fields=selected.input_fields)
         except ValueError:
             # A cached success must not bypass newly supplied provenance errors.
             queued = self.coordinator.create_job(key)
-            return self.coordinator.run(queued.job_id, lambda token: audit_research_input(frame))
+            return self.coordinator.run(queued.job_id, lambda token: audit_research_input(frame, feature_fields=selected.input_fields))
 
         def compute(inner_token: CancellationToken) -> dict[str, Any]:
             token = external_token or inner_token
-            audit_research_input(frame)
+            audit_research_input(frame, feature_fields=selected.input_fields)
             if compute_override is not None:
                 return compute_override(token)
             return self._compute(
@@ -128,7 +130,7 @@ class FactorResearchJobService:
     ) -> dict[str, Any]:
         token.report(.12, 'features')
         selected = next(spec for spec in self.specs if spec.factor_id == config.factor_id)
-        integrity = audit_research_input(frame)
+        integrity = audit_research_input(frame, feature_fields=selected.input_fields)
         factor_frame = compute_basic_factors(frame.copy(deep=True), factor_ids={config.factor_id})
         output_column = config.factor_id.split('.', 1)[-1]
         prefix = assert_causal_prefix(frame, lambda f: compute_basic_factors(

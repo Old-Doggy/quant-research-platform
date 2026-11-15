@@ -16,6 +16,7 @@ from .portfolio_recipe import PortfolioRecipe, resolve_portfolio_recipe
 from .strategies import generate_signal, normalize_strategy_params
 from .research_manifest import build_run_manifest
 from .research_integrity import audit_research_input
+from .strategy_catalog import audit_strategy_input
 
 
 ENGINE = "portfolio-workspace.v1.1"
@@ -96,7 +97,8 @@ def run_portfolio_workspace(frames, *, recipe: PortfolioRecipe, spec: ExecutionS
         raise ValueError("only next-session open/close is supported")
     if spec.price_field != {"next_open": "open", "next_close": "close"}[spec.fill_model]:
         raise ValueError("execution policy and price field disagree")
-    integrity = {symbol: audit_research_input(frame) for symbol, frame in frames.items()}
+    integrity = {symbol: (audit_strategy_input(frame, strategy_key) if target_schedule is None
+                         else audit_research_input(frame)) for symbol, frame in frames.items()}
     prepared, sessions = _prepare(frames)
     params = normalize_strategy_params(strategy_key, params) if target_schedule is None else {}
     resolved = resolve_portfolio_recipe(recipe, set(prepared))

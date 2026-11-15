@@ -69,6 +69,8 @@ def build_experiment(frame: pd.DataFrame, spec: dict, *, name: str = "Research r
     """Create a local-only reproducible archive; never include unknown source columns."""
     audit_research_input(frame)
     allowed = set(REQUIRED_PRICE_COLUMNS) | set(OPTIONAL_COLUMNS) | {"symbol", "return"}
+    allowed |= {'decision_at', 'available_at', 'feature_available_at', 'group_available_at',
+                'adjustment_available_at', *[field + '_available_at' for field in OPTIONAL_COLUMNS]}
     source = frame.loc[frame["symbol"].isin(spec["symbols"]), [key for key in frame.columns if key in allowed]].copy()
     source = source.sort_values(["symbol", "trade_date"], kind="stable").reset_index(drop=True)
     data = _csv(source)

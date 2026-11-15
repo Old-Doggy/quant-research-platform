@@ -295,7 +295,13 @@ def _render_explicit_research_workspace(route_state) -> None:
                             key=f"explicit_{route_state.active_workspace}_{key}",
                         )
         st.caption("可直接使用默认参数运行；需要调整时展开高级设置。")
-        start = st.button("运行研究", type="primary", key=f"run_explicit_{route_state.active_workspace}", width="stretch")
+        from .strategy_catalog import strategy_input_status
+        readiness = strategy_input_status(demo_frame.loc[demo_frame.symbol.isin(symbols)], strategy_key)
+        if not readiness['can_run']:
+            st.caption(readiness['message'])
+            st.caption(readiness['action'])
+        start = st.button("运行研究", type="primary", key=f"run_explicit_{route_state.active_workspace}", width="stretch",
+                          disabled=not readiness['can_run'])
     result_area = result_column.container()
     try:
         normalize_strategy_params(strategy_key, strategy_params)

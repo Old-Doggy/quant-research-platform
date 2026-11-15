@@ -325,7 +325,13 @@ def _render_watch_workspace_body(route_state: Any, *, app_globals: Mapping[str, 
             st.caption(f"提交 {stats.submissions} 次 · 命中 {stats.cache_hits} 次 · {cache_key.key_id}")
         help_link('运行与缓存详情', _explain_328, key='watch_workspace_help_328')
     with submit_column:
-        start_dashboard = st.button("提交研究", type="primary", key="submit_dashboard_research", width="stretch")
+        from .strategy_catalog import strategy_input_status
+        blocked = [strategy_input_status(history, strategy.key) for history in research_frames.values()]
+        blocked = [item for item in blocked if not item['can_run']]
+        if blocked:
+            st.caption(blocked[0]['message'])
+            st.caption(blocked[0]['action'])
+        start_dashboard = st.button("提交研究", type="primary", key="submit_dashboard_research", width="stretch", disabled=bool(blocked))
     def compute_research(token) -> dict[str, object]:
         token.report(.05, "preflight")
         if analysis_mode == "等权组合":

@@ -147,7 +147,13 @@ def _render_portfolio_workspace(frame, *, context_id, public_mode):
                         float(weights[symbol]), .05, key=f"portfolio_weight_{symbol}")
             st.caption("目标权重：" + " · ".join(f"{s} {w:.1%}" for s, w in weights.items()) + f" · 现金 {cash_weight:.1%}")
         with run_slot:
-            start = st.button("运行组合研究", type="primary", key="portfolio_run", width="stretch")
+            from .strategy_catalog import strategy_input_status
+            readiness = strategy_input_status(frame.loc[frame.symbol.isin(symbols)], strategy_key)
+            if not readiness['can_run']:
+                st.caption(readiness['message'])
+                st.caption(readiness['action'])
+            start = st.button("运行组合研究", type="primary", key="portfolio_run", width="stretch",
+                              disabled=not readiness['can_run'])
         st.caption(f"现金 {cash_weight:.0%} · 单边费用 {cost:g} 基点 · 滑点 {slippage:g} 基点")
     result_area = result_column.container()
     try:

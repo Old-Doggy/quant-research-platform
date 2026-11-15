@@ -59,8 +59,11 @@ def test_strategy_parameters_change_signal_output_without_changing_contract():
 
 
 def test_configured_quality_momentum_uses_named_parameters():
+    frame = sample_frame()
+    frame['roe_available_at'] = frame.trade_date
+    frame['pb_available_at'] = frame.trade_date
     result = generate_signal(
-        sample_frame(),
+        frame,
         "quality_momentum",
         params={"min_roe": 10.0, "max_pb": 3.0, "momentum_window": 40},
     )

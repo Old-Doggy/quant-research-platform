@@ -7,7 +7,7 @@ import math
 import pandas as pd
 
 from .research_manifest import build_run_manifest
-from .research_integrity import audit_research_input
+from .strategy_catalog import audit_strategy_input
 
 from portfolio_app.backtest import run_backtest
 from portfolio_app.data import build_data_quality_report
@@ -92,7 +92,7 @@ def run_portfolio_research(
     if not math.isfinite(transaction_cost) or transaction_cost < 0:
         raise ValueError("transaction_cost must be non-negative")
     weights, cash_weight = _normalize_portfolio_weights(frames, target_weights, cash_weight, missing_leg_policy)
-    integrity = {symbol: audit_research_input(frame) for symbol, frame in frames.items()}
+    integrity = {symbol: audit_strategy_input(frame, strategy_key) for symbol, frame in frames.items() if symbol in weights}
     signalled_results: dict[str, pd.DataFrame] = {}
     events: list[dict[str, object]] = []
     for symbol, leg_frame in frames.items():
@@ -214,7 +214,7 @@ def run_single_stock_research(
 
     if token:
         token.report(.1, 'preflight')
-    integrity = audit_research_input(frame)
+    integrity = audit_strategy_input(frame, strategy_key)
     normalized_params = normalize_strategy_params(strategy_key, params)
     source = frame.copy()
     source["trade_date"] = pd.to_datetime(source["trade_date"], errors="coerce")
