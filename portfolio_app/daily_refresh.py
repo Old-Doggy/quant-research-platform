@@ -1,6 +1,7 @@
 """A limited free-source daily refresh path; research eligibility stays separate."""
 from datetime import date, datetime
 from zoneinfo import ZoneInfo
+import re
 
 from .instrument_master import InstrumentMaster, _date
 from .calendar_service import MarketCalendar
@@ -9,17 +10,29 @@ from .providers.free_sdk import FreeDailyProvider
 from .snapshot_contracts import identity_hash
 from .snapshot_store import SnapshotStore
 from .update_jobs import run_update
+from .dataset_registry import _validate_dataset_id
+
+
+def validate_free_scope(symbols, start, end):
+    _date(start); _date(end)
+    if start > end or (date.fromisoformat(end)-date.fromisoformat(start)).days > 366:
+        raise ValueError('首版免费更新每次最多一年，请分段补抓')
+    if not isinstance(symbols, (list, tuple)) or any(
+        not isinstance(s, str) or not re.fullmatch(r'(?:6\d{5}\.SH|[03]\d{5}\.SZ)', s)
+        for s in symbols
+    ):
+        raise ValueError('免费更新只接受明确的沪深A股代码')
+    symbols = sorted(set(symbols))
+    if not 1 <= len(symbols) <= 20:
+        raise ValueError('免费更新每次选择1至20只沪深A股')
+    return symbols
 
 
 def refresh_free_daily(root, *, symbols, start, end, observed_on=None, dataset_id='free-a-daily',
                        reference=None, providers=None):
-    _date(start); _date(end)
+    symbols = validate_free_scope(symbols, start, end)
+    _validate_dataset_id(dataset_id)
     observed_on=_date(observed_on or datetime.now(ZoneInfo('Asia/Shanghai')).date().isoformat())
-    if start>end or (date.fromisoformat(end)-date.fromisoformat(start)).days>366:
-        raise ValueError('首版免费更新每次最多一年，请分段补抓')
-    symbols=sorted(set(symbols))
-    if not symbols or len(symbols)>20 or any(not isinstance(s,str) or not s.endswith(('.SH','.SZ')) for s in symbols):
-        raise ValueError('免费更新每次选择1至20只沪深A股')
     store=SnapshotStore(root)
     reference=reference or BaoStockReference()
     providers=providers or {p:FreeDailyProvider(p) for p in ('sina','baostock')}
