@@ -38,7 +38,8 @@ def financial_asof(store, *, endpoint, symbol, as_of, calendar, report_type='1',
         previous=by_version.get(row['report_version'])
         if previous is None or row['available_at']<previous['available_at']:
             by_version[row['report_version']]=row
-    rank=lambda r:(r['available_at'],max(r['ann_date'],r['f_ann_date'] or r['ann_date']))
+    # Observation time controls eligibility, never the revision sequence.
+    rank=lambda r:max(r['ann_date'],r['f_ann_date'] or r['ann_date'])
     latest=max(rank(r) for r in by_version.values())
     chosen=[r for r in by_version.values() if rank(r)==latest]
     if len(chosen)!=1:

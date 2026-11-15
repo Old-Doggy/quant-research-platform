@@ -63,3 +63,16 @@ def test_missing_financial_value_remains_missing_without_becoming_zero(tmp_path)
     row=statement();row['revenue']=None
     store.ingest(batch(row,'2025-04-21T23:00:00+08:00'))
     assert store.observations(endpoint='income',symbol='600000.SH')[0]['revenue'] is None
+
+
+def test_late_old_report_does_not_replace_an_earlier_observed_correction(tmp_path):
+    store=FinancialStore(tmp_path)
+    revision=statement(120.);revision.update(ann_date='20250520',f_ann_date='20250520',update_flag='1')
+    store.ingest(batch(revision,'2025-05-20T20:00:00+08:00'))
+    store.ingest(batch(statement(),'2025-05-25T20:00:00+08:00'))
+    opts=dict(endpoint='income',symbol='600000.SH',calendar=calendar(),as_of='2025-05-26')
+    assert financial_asof(store,**opts)['revenue']==120.
+    conflicting=statement(130.);conflicting.update(ann_date='20250520',f_ann_date='20250520',update_flag='1')
+    store.ingest(batch(conflicting,'2025-05-25T21:00:00+08:00'))
+    with pytest.raises(ValueError,match='不同财务版本'):
+        financial_asof(store,**opts)
