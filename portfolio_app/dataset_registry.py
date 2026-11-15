@@ -230,10 +230,17 @@ def register_dataset(
         )
     if preview.status == "duplicate":
         return preview
+    if preview.status == 'overwrite':
+        raise ValueError('已登记版本不可覆盖（immutable）；请登记新版本以保留旧研究引用')
 
     record = _record_payload(manifest, preview.proposed_version, preview.fingerprint)
     version_root = _version_root(root, manifest.dataset_id, preview.proposed_version)
     records, _ = _load_index_records(root)
+    from .snapshot_contracts import snapshot_from_hash
+    previous = [r for r in records if r.get('dataset_id') == manifest.dataset_id]
+    generation = max((r.get('snapshot', {}).get('generation', 0) for r in previous), default=0) + 1
+    record['snapshot'] = asdict(snapshot_from_hash(preview.fingerprint.content_hash,
+        dataset_id=manifest.dataset_id, generation=generation, price_basis=manifest.to_dict().get('price_mode', 'unknown')))
     if preview.status == "overwrite":
         records = [
             existing for existing in records

@@ -56,6 +56,8 @@ def portfolio_data_fingerprint(frames, corporate_actions=(), instrument_rules=No
     digest.update((table.fingerprint if table else 'legacy_assumptions').encode())
     for symbol, frame in sorted(frames.items()):
         digest.update(symbol.encode())
+        from .research_result_cache import build_data_fingerprint
+        digest.update(build_data_fingerprint(frame).encode())
         if 'session_calendar' in frame.attrs:
             digest.update(semantic_hash(asdict(frame.attrs['session_calendar'])).encode())
         digest.update(frame.to_csv(index=False, lineterminator="\n").encode())
@@ -244,7 +246,8 @@ def run_portfolio_workspace(frames, *, recipe: PortfolioRecipe, spec: ExecutionS
         labels={'kind': 'none'}, execution=asdict(spec), parameters=config,
         cost={'commission_bps': spec.commission_bps, 'slippage_bps': spec.slippage_bps},
         evaluation='fixed_parameter_cash_ledger', processing={'version': ENGINE,
-            'sessions': 'exact_common_sessions', 'initial_cash': initial_cash})
+            'sessions': 'exact_common_sessions', 'initial_cash': initial_cash,
+            'input_revision': inputs['data_sha256']})
     metrics = dict(total_return=total_return, total_cost=float(ledger.cost.sum()),
         max_drawdown=float((pd.Series([initial_cash, *ledger.nav]) / pd.Series([initial_cash, *ledger.nav]).cummax() - 1).min()),
         fills=len(fills), rejected=sum(o["status"] == "REJECTED" for o in orders),

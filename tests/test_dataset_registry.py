@@ -147,10 +147,8 @@ def test_overwrite_target_is_explicit_and_does_not_happen_without_confirmation(t
     assert preview.requires_confirmation is True
     with pytest.raises(RegistrationConfirmationRequired):
         register_dataset(registry, _manifest(frame), source, target_version=first.proposed_version)
-    result = register_dataset(
-        registry, _manifest(frame), source, target_version=first.proposed_version, confirm=True
-    )
-    assert result.status == "overwrite"
+    with pytest.raises(ValueError, match='immutable|不可覆盖'):
+        register_dataset(registry, _manifest(frame), source, target_version=first.proposed_version, confirm=True)
     assert len(load_dataset_registry(registry)["datasets"]) == 1
 
 

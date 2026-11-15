@@ -7,12 +7,17 @@ from .data import build_data_quality_report
 from .research_result_cache import build_data_fingerprint
 
 
-def activate_dataset(session, frame, *, dataset_id, version, source_kind, price_basis='unspecified'):
+def activate_dataset(session, frame, *, dataset_id, version, source_kind, price_basis='unspecified', generation=1):
     if frame is None or frame.empty or build_data_quality_report(frame)['status'] != '通过':
         raise ValueError('dataset quality must pass before research')
     owned = frame.copy(deep=True)
+    from dataclasses import asdict
+    from .snapshot_contracts import build_frame_snapshot
+    snapshot = build_frame_snapshot(owned, dataset_id=dataset_id, generation=generation, price_basis=price_basis)
+    owned.attrs['snapshot'] = asdict(snapshot)
     metadata = dict(dataset_id=dataset_id, version=version, source_kind=source_kind,
-                    price_basis=price_basis, fingerprint=build_data_fingerprint(owned))
+                    price_basis=price_basis, fingerprint=build_data_fingerprint(owned),
+                    snapshot_id=snapshot.snapshot_id, dataset_generation=generation)
     owned.attrs['research_dataset'] = metadata
     session['_registered_research_dataset'] = owned
     session['_use_registered_research_dataset'] = True
@@ -39,4 +44,5 @@ def record_context(session, workspace, frame, *, source_kind=None, price_basis=N
         dataset_id=metadata['dataset_id'], version=metadata['version'],
         source_kind=source_kind or metadata['source_kind'],
         price_basis=price_basis or metadata['price_basis'], period=period,
+        snapshot_id=metadata.get('snapshot_id'), dataset_generation=metadata.get('dataset_generation'),
         as_of=pd.to_datetime(frame.trade_date).max().date().isoformat(), symbol=symbol)

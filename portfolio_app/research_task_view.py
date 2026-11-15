@@ -5,21 +5,12 @@ from pathlib import Path
 
 import streamlit as st
 
-from .research_manifest import semantic_hash, _ENGINE_FILES, _runtime
+from .research_manifest import computation_revision
 from .research_result_cache import build_research_cache_key
 from .research_runtime import ResearchRunner, TaskJournal
 from .research_run_state import begin_run, complete_run, fail_run
 from .research_diagnostics import configure_diagnostics, show_safe_error
 from .ui_copy import format_research_status
-
-
-def computation_revision():
-    import hashlib
-    root = Path(__file__).parent
-    sources = {name: hashlib.sha256((root / name).read_bytes()).hexdigest()
-                          for name in (*_ENGINE_FILES, 'research_runtime.py', 'research_result_cache.py')
-                if (root / name).is_file()}
-    return semantic_hash(dict(sources=sources, runtime=_runtime()))
 
 
 def research_task_status_label(task):

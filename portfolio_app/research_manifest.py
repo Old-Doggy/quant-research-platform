@@ -25,6 +25,7 @@ _ENGINE_FILES = ('research.py', 'backtest.py', 'strategies.py', 'indicators.py',
                  'corporate_actions.py', 'entitlement_ledger.py',
                  'instrument_rules.py',
                  'market_sessions.py',
+                 'snapshot_contracts.py',
                  'factor_research_result.py', 'portfolio.py', 'portfolio_attribution.py',
                  'portfolio_risk.py', 'performance_metrics.py', 'factor_rank_strategy.py')
 
@@ -55,6 +56,14 @@ def _runtime():
     return dict(python=platform.python_version(), libraries=libraries)
 
 
+def computation_revision():
+    root = Path(__file__).parent
+    sources = {name: hashlib.sha256((root / name).read_bytes()).hexdigest()
+               for name in (*_ENGINE_FILES, 'research_runtime.py', 'research_result_cache.py')
+               if (root / name).is_file()}
+    return semantic_hash(dict(sources=sources, runtime=_runtime()))
+
+
 def build_run_manifest(*, frame, engine_id, features, labels, execution, parameters,
                        cost, evaluation, processing):
     """Hash exact supplied input and definitions; never serialize raw parameters/paths.
@@ -72,8 +81,9 @@ def build_run_manifest(*, frame, engine_id, features, labels, execution, paramet
     root = Path(__file__).parent
     engine_sources = {name: hashlib.sha256((root / name).read_bytes()).hexdigest()
                       for name in _ENGINE_FILES if (root / name).is_file()}
+    from .snapshot_contracts import frame_provenance
     hashes = dict(data=semantic_hash(dict(values=frame_hash(frame),
-                  timing=frame.attrs.get('research_timing', {}))), feature=semantic_hash(features),
+                  provenance=frame_provenance(frame))), feature=semantic_hash(features),
                   label=semantic_hash(labels), execution=semantic_hash(execution),
                   parameters=semantic_hash(parameters), processing=semantic_hash(processing),
                   engine=semantic_hash(dict(identity=engine_id, sources=engine_sources)))

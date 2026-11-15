@@ -65,11 +65,12 @@ class FactorResearchJobService:
         if external_token:
             external_token.report(.05, 'preflight')
         preflight = preflight_factor_research(frame, config, specs=self.specs)
+        from .research_manifest import computation_revision
         key = build_research_cache_key(
             dataset_id=config.dataset_id,
             data_version=build_data_fingerprint(frame),
             processing={**config.to_dict(), 'timing': frame.attrs.get('research_timing', {}),
-                        'specs': [str(s) for s in self.specs]},
+                        'specs': [str(s) for s in self.specs], 'algorithm_revision': computation_revision()},
             engine_id="factor_research.v1",
         )
         if not preflight.submittable:

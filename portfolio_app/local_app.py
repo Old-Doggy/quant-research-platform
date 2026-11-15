@@ -148,13 +148,8 @@ def _research_job_coordinator() -> ResearchJobCoordinator:
 
 
 def _research_data_version(frames: dict[str, pd.DataFrame]) -> str:
-    parts: list[pd.DataFrame] = []
-    for symbol, frame in sorted(frames.items()):
-        part = frame.copy()
-        if "symbol" not in part.columns:
-            part.insert(0, "symbol", symbol)
-        parts.append(part)
-    return build_data_fingerprint(pd.concat(parts, ignore_index=True, sort=False))
+    from portfolio_app.snapshot_contracts import identity_hash
+    return 'data-' + identity_hash({symbol: build_data_fingerprint(frame) for symbol, frame in sorted(frames.items())})
 
 
 def _research_processing_payload(
@@ -406,12 +401,10 @@ def render_strategy_showcase_card(card: dict[str, object], *, expanded: bool = F
 st.set_page_config(page_title="量化研究与可视化平台", page_icon="Q", layout="wide", initial_sidebar_state="expanded")
 
 
-@st.cache_data(show_spinner=False)
 def cached_symbols(data_root: str, adjusted: str = "qfq") -> list[str]:
     return list_local_symbols(data_root, adjusted)
 
 
-@st.cache_data(show_spinner=False)
 def cached_symbol_names(data_root: str) -> dict[str, str]:
     path = Path(data_root) / "stock_basic.csv"
     if not path.is_file():
@@ -423,7 +416,6 @@ def cached_symbol_names(data_root: str) -> dict[str, str]:
     return dict(zip(basic["ts_code"], basic["name"]))
 
 
-@st.cache_data(show_spinner=False)
 def cached_stock_catalog(data_root: str, adjusted: str = "qfq") -> list[dict[str, object]]:
     """Build the directory from filenames and the name table.
 
@@ -570,9 +562,7 @@ def _render_pure_stock_view(
     render_recent_quotes(display_frame, key='market_recent_quotes', table=table)
 
 
-@st.cache_data(show_spinner=False)
-def cached_local_symbol(data_root: str, symbol: str, adjusted: str):
-    return load_local_symbol(data_root, symbol, adjusted)
+from portfolio_app.market_file_cache import cached_local_symbol
 
 
 def format_metric(value: float, percent: bool = False) -> str:

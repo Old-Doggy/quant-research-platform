@@ -27,10 +27,10 @@ def build_data_fingerprint(frame: pd.DataFrame) -> str:
         raise TypeError("frame must be a pandas DataFrame")
     normalized = frame.reset_index(drop=True).copy()
     normalized = normalized.reindex(sorted(normalized.columns), axis=1)
+    from .snapshot_contracts import frame_provenance
     digest = hashlib.sha256(_canonical_json({
         'schema': [(str(c), str(normalized[c].dtype)) for c in normalized],
-        'timing': frame.attrs.get('research_timing', {}),
-        'dataset': frame.attrs.get('research_dataset', {})}).encode())
+        'provenance': frame_provenance(frame)}).encode())
     digest.update(pd.util.hash_pandas_object(normalized, index=False).to_numpy().tobytes())
     return 'data-' + digest.hexdigest()
 
