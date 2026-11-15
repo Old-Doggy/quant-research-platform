@@ -75,3 +75,47 @@ def test_a_share_reference_does_not_guess_fund_or_bond_units():
     for code in ['510300.SH', '113001.SH', '900901.SH']:
         with pytest.raises(ValueError):
             ref.adjustment_factors('2025-01-02', expected_symbols=[code])
+
+
+def test_limit_prices_filter_funds_and_keep_unknown_limits_explicit():
+    ref, _ = adapter([['600000.SH', '20250102', 10., 11., 9.],
+                      ['510300.SH', '20250102', 4., 4.4, 3.6],
+                      ['000001.SZ', '20250102', 10., None, None]],
+                     ['ts_code','trade_date','pre_close','up_limit','down_limit'])
+    batch = ref.price_limits('2025-01-02', expected_symbols=['600000.SH','000001.SZ'])
+    assert set(batch.frame.ts_code) == {'600000.SH','000001.SZ'}
+    assert batch.completeness == 'partial'
+    assert batch.metadata['unresolved_symbols'] == ['000001.SZ']
+    assert len(batch.raw) == 3
+    bad, _ = adapter([['600000.SH','20250102',10.,9.,11.]],
+                     ['ts_code','trade_date','pre_close','up_limit','down_limit'])
+    with pytest.raises(ProviderError):
+        bad.price_limits('2025-01-02', expected_symbols=['600000.SH'])
+
+
+def test_index_points_are_not_share_prices_and_missing_sessions_remain_missing():
+    from portfolio_app.providers.tushare_reference import TushareReference
+    calls = []
+    def transport(endpoint, params, *, fields):
+        calls.append(params)
+        rows = [['000300.SH',params['trade_date'],100.,101.,99.,100.,100.,1.,10.]] if params['trade_date']=='20250102' else []
+        return dict(code=0, data=dict(fields=fields.split(','), items=rows))
+    ref = TushareReference(TushareProvider(token='test', transport=transport, min_interval=0))
+    batch = ref.index_daily('000300.SH', sessions=['2025-01-02','2025-01-03'])
+    assert len(batch.frame) == 1 and len(calls) == 2
+    assert batch.completeness == 'partial'
+    assert batch.metadata['missing_sessions'] == ['2025-01-03']
+    assert batch.metadata['return_basis'] == 'unclassified_index'
+    assert batch.frame.attrs['field_units']['close'] == 'index_points'
+    assert batch.frame.amount.iloc[0] == 10000.
+    assert 'volume' not in batch.frame
+
+
+def test_index_missing_required_prices_does_not_fabricate_return_or_zero_volume():
+    from portfolio_app.providers.tushare_reference import TushareReference
+    def transport(endpoint, params, *, fields):
+        row = ['000300.SH','20250102',100.,101.,99.,None,100.,None,10.]
+        return dict(code=0, data=dict(fields=fields.split(','), items=[row]))
+    ref = TushareReference(TushareProvider(token='test', transport=transport, min_interval=0))
+    with pytest.raises(ProviderError):
+        ref.index_daily('000300.SH', sessions=['2025-01-02'])

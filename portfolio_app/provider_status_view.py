@@ -16,7 +16,8 @@ def render_provider_status():
             st.session_state['provider_probe_results'] = [probe_tushare_permission(provider, row['capability']) for row in capabilities]
         labels = {'a_daily_raw': 'A股日线', 'instrument_master': '证券主表', 'market_calendar': '交易日历',
                   'adjustment_factors': '复权因子', 'daily_basic': '每日指标',
-                  'dividends': '分红送转', 'suspensions': '停复牌'}
+                  'dividends': '分红送转', 'suspensions': '停复牌',
+                  'price_limits': '涨跌停价', 'index_daily': '指数日线'}
         statuses = {'available': '可访问', 'permission_denied': '权限不足', 'rate_limited': '限流，稍后重试',
             'network_error': '连接失败', 'credentials_missing': '未配置凭据', 'credentials_invalid': '凭据无效',
             'empty_response': '返回为空', 'invalid_response': '返回格式异常', 'upstream_rejected': '请求未接受'}

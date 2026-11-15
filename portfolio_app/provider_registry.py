@@ -15,7 +15,9 @@ def provider_capabilities():
             ('adjustment_factors', 'https://tushare.pro/document/2?doc_id=28'),
             ('daily_basic', 'https://tushare.pro/document/2?doc_id=32'),
             ('dividends', 'https://tushare.pro/document/2?doc_id=103'),
-            ('suspensions', 'https://tushare.pro/document/2?doc_id=214')]]
+            ('suspensions', 'https://tushare.pro/document/2?doc_id=214'),
+            ('price_limits', 'https://tushare.pro/document/2?doc_id=183'),
+            ('index_daily', 'https://tushare.pro/document/2?doc_id=95')]]
 
 
 def probe_tushare_permission(provider, capability):
@@ -26,7 +28,9 @@ def probe_tushare_permission(provider, capability):
         'adjustment_factors': ('adj_factor', dict(ts_code='600000.SH', trade_date='20250102'), 'ts_code,trade_date,adj_factor'),
         'daily_basic': ('daily_basic', dict(ts_code='600000.SH', trade_date='20250102'), 'ts_code,trade_date,pb'),
         'dividends': ('dividend', dict(ts_code='600000.SH', ex_date='20250604'), 'ts_code,div_proc,ex_date'),
-        'suspensions': ('suspend_d', dict(ts_code='600000.SH', trade_date='20250102'), 'ts_code,trade_date,suspend_type')}
+        'suspensions': ('suspend_d', dict(ts_code='600000.SH', trade_date='20250102'), 'ts_code,trade_date,suspend_type'),
+        'price_limits': ('stk_limit', dict(ts_code='600000.SH', trade_date='20250102'), 'ts_code,trade_date,up_limit,down_limit'),
+        'index_daily': ('index_daily', dict(ts_code='000300.SH', trade_date='20250102'), 'ts_code,trade_date,close')}
     if capability not in requests:
         raise ValueError('unknown provider capability')
     endpoint, params, fields = requests[capability]
