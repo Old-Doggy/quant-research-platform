@@ -43,6 +43,9 @@ def _render_watch_workspace_body(route_state: Any, *, app_globals: Mapping[str, 
 
     """Current watch implementation, kept intact for incremental extraction."""
     workspace_heading("行情与研究")
+    from .market_watch import render_market_watch
+    if render_market_watch(route_state, app_globals):
+        return
     from .research_dataset import selected_dataset, record_context
     registered_frame = selected_dataset(st.session_state, lambda: None)
     route_symbol = route_state.context.symbol

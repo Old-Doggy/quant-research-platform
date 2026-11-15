@@ -123,6 +123,8 @@ def render_context_status_bar(
         status['data'] += f" / {actual['version']}"
     if actual.get('symbol'):
         status['data'] += f" · {actual['symbol']}"
+    if workspace=='watch' and actual.get('source_kind')=='provider_snapshot':
+        status['state']='行情浏览'
     if workspace == 'data' and actual.get('ready'):
         status['state'] = '数据已就绪 / Ready'
     if workspace == 'experiments':
@@ -157,7 +159,7 @@ def render_context_status_bar(
         import re
         fields = tuple((label.split(' / ')[0], re.sub(
             r' / (?:Watch|Factors|Strategy|Portfolio|Data|Experiments|Showcase|Synthetic demo|'
-            r'Local market|File import|QFQ|HFQ|Raw|Synthetic|Daily|Weekly|Monthly|'
+            r'Local market|Checked market data|File import|QFQ|HFQ|Raw|Synthetic|Daily|Weekly|Monthly|'
             r'Draft|Result|Stale|Running|Failed|Cancelled|Ready|Review|Pending|Unspecified|'
             r'Curated research summary|Per-run datasets|Per-run periods|Per-run manifests|'
             r'Historical offline research simulation)(?=\s*[·/]|$)', '', value))
@@ -173,10 +175,13 @@ def render_context_status_bar(
     if workspace in {"watch", "factors", "strategy", "portfolio", "experiments"}:
         def explain():
             st.write({'synthetic': '使用生成的示例行情。', 'local_market': '使用本地行情文件。',
-                      'file_import': '使用本次导入的数据。'}.get(source, '使用公开研究摘要。'))
-            st.write('结果为历史离线模拟。期间、价格口径和成本以当前运行记录为准。')
+                      'file_import': '使用本次导入的数据。',
+                      'provider_snapshot':'使用已核对的原始日线快照，来源与版本保存在本机。'}.get(source, '使用公开研究摘要。'))
+            st.write('公司行为和历史交易规则核验完成后开放研究。' if source=='provider_snapshot'
+                else '结果为历史离线模拟。期间、价格口径和成本以当前运行记录为准。')
             if workspace == 'watch':
-                st.write('成交量与成交额沿用源文件单位；缺失值显示为 —。')
+                st.write('成交量单位为股，成交额单位为元。' if source=='provider_snapshot'
+                    else '成交量与成交额沿用源文件单位；缺失值显示为 —。')
             if workspace == 'experiments':
                 st.write('各记录使用独立数据和期间，比较前请核对运行清单。')
         with target.container():

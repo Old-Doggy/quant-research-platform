@@ -22,6 +22,7 @@ _DATA_SOURCES = {
     "synthetic": "合成示例 / Synthetic demo",
     "file_import": "文件导入 / File import",
     "local_market": "本地行情 / Local market",
+    "provider_snapshot": "已核对行情 / Checked market data",
     "curated_research_summary": "公开研究摘要 / Curated research summary",
 }
 _BASES = {
@@ -172,6 +173,7 @@ def resolve_data_source(
         "file_import": "file_import",
         "本地行情": "local_market",
         "local_market": "local_market",
+        "provider_snapshot": "provider_snapshot",
         "公开研究摘要": "curated_research_summary",
         "curated_research_summary": "curated_research_summary",
     }

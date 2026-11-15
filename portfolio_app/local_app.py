@@ -491,7 +491,7 @@ def _render_pure_stock_view(
         value=(available_dates.min().date(), available_dates.max().date()),
         min_value=available_dates.min().date(),
         max_value=available_dates.max().date(),
-        key=f"market_date_range_{symbol}",
+        key=f"market_date_range_{symbol}_{frame.attrs.get('snapshot', {}).get('snapshot_id', 'legacy')}",
     )
     if not isinstance(market_dates, tuple) or len(market_dates) != 2:
         st.info("请选择完整的行情起止日期。")
