@@ -89,16 +89,23 @@ class SnapshotStore:
             raise ValueError('快照行情结构、数值或唯一键检查未通过')
         return frame,next(iter(providers))
 
-    def publish_daily(self, *, dataset_id, batch_ids, comparison_ids, master, calendars,
-                      start, end, symbols, reference_batch_ids=()):
-        _validate_dataset_id(dataset_id)
+    def inspect_daily(self, *, batch_ids, comparison_ids, master, calendars, start, end, symbols):
         primary,provider=self._frames(batch_ids)
         secondary,other=self._frames(comparison_ids)
         coverage=check_daily_coverage(primary,master=master,calendars=calendars,
             start=start,end=end,symbols=symbols)
+        comparison=compare_daily_sources(primary,secondary,primary_provider=provider,secondary_provider=other)
+        return dict(coverage=coverage,comparison=comparison)
+
+    def publish_daily(self, *, dataset_id, batch_ids, comparison_ids, master, calendars,
+                      start, end, symbols, reference_batch_ids=()):
+        _validate_dataset_id(dataset_id)
+        checks=self.inspect_daily(batch_ids=batch_ids,comparison_ids=comparison_ids,master=master,
+            calendars=calendars,start=start,end=end,symbols=symbols)
+        coverage,comparison=checks['coverage'],checks['comparison']
+        provider,other=comparison['primary_provider'],comparison['secondary_provider']
         if coverage['status']!='passed':
             raise ValueError('行情覆盖有缺口或冲突，未发布快照')
-        comparison=compare_daily_sources(primary,secondary,primary_provider=provider,secondary_provider=other)
         if comparison['status']!='passed':
             raise ValueError('跨源核对不完整或冲突，未发布快照')
         for artifact in reference_batch_ids:

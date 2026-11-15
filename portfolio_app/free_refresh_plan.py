@@ -66,14 +66,19 @@ def run_plan(root, plan_id, *, retry=False, providers=None):
     result=dict(plan_id=plan_id,jobs=jobs)
     if any(j['status']!='succeeded' for j in jobs):
         return dict(**result,status='incomplete')
+    candidate=dict(batch_ids=artifacts['baostock'],comparison_ids=artifacts['sina'],master=master,
+        calendars=calendars,start=plan['start'],end=plan['end'],symbols=plan['symbols'])
+    checks=store.inspect_daily(**candidate)
+    if any(checks[name]['status']!='passed' for name in ('coverage','comparison')):
+        return dict(**result,status='needs_review',checks=checks)
     # Re-running an already published plan does not create a duplicate generation.
     current=store.current(plan['dataset_id'])
     if current and current['batch_ids']==artifacts['baostock'] and current['comparison_ids']==artifacts['sina'] and current.get('reference_batch_ids')==plan['reference_batch_ids']:
-        return dict(**result,status='published',snapshot=current)
+        return dict(**result,status='published',snapshot=current,checks=checks)
     try:
         snapshot=store.publish_daily(dataset_id=plan['dataset_id'],batch_ids=artifacts['baostock'],comparison_ids=artifacts['sina'],
             master=master,calendars=calendars,start=plan['start'],end=plan['end'],symbols=plan['symbols'],
             reference_batch_ids=plan['reference_batch_ids'])
     except ValueError:
         return dict(**result,status='needs_review')
-    return dict(**result,status='published',snapshot=snapshot)
+    return dict(**result,status='published',snapshot=snapshot,checks=checks)

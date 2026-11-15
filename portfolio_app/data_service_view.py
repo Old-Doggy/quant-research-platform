@@ -69,11 +69,26 @@ def _render_update(store):
             st.caption('原因：'+reasons.get(report['error_code'], '来源请求未完成（'+report['error_code']+'）'))
         if report.get('jobs'):
             rows=[]
-            for job in report['jobs']:
-                for part in store.updates.shards(job['job_id']):
-                    rows.append({'来源':store.updates.request(job['job_id'])['provider'],
-                        '证券':part['payload']['symbol'], '状态':part['status'], '尝试次数':part['attempts']})
+            states={'succeeded':'已下载','pending':'待下载','retry_wait':'等待重试','running':'下载中',
+                'failed':'失败','needs_review':'待核对'}
+            try:
+                for job in report['jobs']:
+                    for part in store.updates.shards(job['job_id']):
+                        history=[h for h in store.updates.history(job['job_id']) if h['shard']==part['id']]
+                        rows.append({'来源':store.updates.request(job['job_id'])['provider'],
+                            '证券':part['payload']['symbol'], '状态':states.get(part['status'],part['status']),
+                            '尝试次数':part['attempts'], '原因':history[-1]['error_code'] or '—' if history else '—'})
+            except (ValueError,OSError,KeyError):
+                st.error('分片日志校验失败，请检查本机更新记录。')
             st.dataframe(rows,hide_index=True,width='stretch')
+        if report.get('checks'):
+            checks=report['checks']
+            st.caption('覆盖：'+('通过' if checks['coverage']['status']=='passed' else '待核对')+
+                ' · 来源核对：'+('通过' if checks['comparison']['status']=='passed' else '待核对'))
+            differences=checks['comparison'].get('differences',[])
+            if differences:
+                with st.expander('来源差异明细'):
+                    st.dataframe(differences,hide_index=True,width='stretch')
         if report.get('plan_id') and report['status']=='incomplete':
             if st.button('只重试未完成分片',key='daily_refresh_retry',disabled=any(r['report']['status']=='awaiting_result' for r in records)):
                 try:
