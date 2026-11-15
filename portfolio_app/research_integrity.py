@@ -16,6 +16,9 @@ class IntegrityViolation(ValueError):
 def audit_research_input(frame, *, feature_fields=()):
     if frame.empty or 'trade_date' not in frame:
         raise IntegrityViolation('缺少决策日期或输入为空')
+    capabilities = frame.attrs.get('research_capabilities', {})
+    if capabilities.get('corporate_action_backtest') is False:
+        raise IntegrityViolation('此快照仅供行情浏览；研究所需公司行为、交易状态与制度尚未核验')
     if any('label' in str(field).lower() or str(field).startswith('forward_') for field in feature_fields):
         raise IntegrityViolation('未来标签不能作为决策特征')
     declarations = frame.attrs.get('research_timing', {})

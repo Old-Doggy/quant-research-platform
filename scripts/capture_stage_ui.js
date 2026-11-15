@@ -1,6 +1,6 @@
 async (page) => {
   const root = 'output/playwright';
-  const stage = 'm1-final';
+  const stage = 'm2-data-foundation';
   const routes = ['watch', 'factors', 'strategy', 'portfolio', 'data', 'experiments', 'showcase'];
   const labels = ['看盘', '因子', '策略', '组合', '数据', '实验', '作品'];
   const titles = ['行情与研究', '因子研究', '策略研究', '组合研究', '数据中心 / Data Center', '实验记录', '研究作品与工程实践'];

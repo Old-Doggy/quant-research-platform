@@ -15,6 +15,7 @@ def test_action_rule_calendar_and_snapshot_metadata_all_change_input_identity():
                        ('session_calendar', calendar), ('snapshot', {'snapshot_id': 'one', 'generation': 1}),
                        ('return_contract', {'definition': 'total_return_v1'}),
                        ('field_units', {'volume': 'shares'}),
+                       ('research_capabilities', {'corporate_action_backtest': False}),
                        ('normalization', {'profile': 'tushare_a_daily', 'version': '1.0'})]:
         changed = frame.copy(deep=True)
         changed.attrs[key] = value

@@ -22,7 +22,8 @@ def identity_hash(value):
 
 def frame_provenance(frame):
     fields = ('research_timing', 'research_dataset', 'snapshot', 'corporate_actions',
-              'instrument_rules', 'session_calendar', 'return_contract', 'action_coverage', 'field_units', 'normalization')
+              'instrument_rules', 'session_calendar', 'return_contract', 'action_coverage', 'field_units', 'normalization',
+              'research_capabilities')
     return _plain({k: frame.attrs[k] for k in fields if k in frame.attrs})
 
 
