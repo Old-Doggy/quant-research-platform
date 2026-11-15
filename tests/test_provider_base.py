@@ -136,10 +136,10 @@ def test_capabilities_do_not_imply_live_verification_and_probes_are_independent(
     from portfolio_app.provider_registry import provider_capabilities, probe_tushare_permission
     from portfolio_app.providers.tushare import TushareProvider
     monkeypatch.delenv('TUSHARE_TOKEN', raising=False)
-    assert all(row['access_status'] == 'credentials_missing' for row in provider_capabilities())
+    assert all(row['access_status'] == 'credentials_missing' for row in provider_capabilities() if row['provider']=='tushare')
     monkeypatch.setenv('TUSHARE_TOKEN', 'secret')
     rows = provider_capabilities()
-    assert all(row['access_status'] == 'not_probed' and not row['live_verified'] for row in rows)
+    assert all(row['access_status'] == 'not_probed' and not row['live_verified'] for row in rows if row['provider']=='tushare')
     def transport(endpoint, params, **kwargs):
         if endpoint == 'daily':
             return dict(code=40203, msg='权限不足 secret')

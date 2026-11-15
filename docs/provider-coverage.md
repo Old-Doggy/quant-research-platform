@@ -1,0 +1,22 @@
+# 数据接口覆盖记录
+
+适配器能解析响应，不等于整个来源已通过研究验收。`complete`只针对请求的记录范围；财务时点、事件完整度和跨源一致性分别检查。当前尚未启用自动主备切换。
+
+## 2026-11-15 本机检查
+
+Tushare未配置token，九类接口具备适配/权限检查入口，真实访问、账户频次及覆盖未验证。官方文档：[日线](https://tushare.pro/document/2?doc_id=27)、[主表](https://tushare.pro/document/2?doc_id=25)、[日历](https://tushare.pro/document/2?doc_id=26)、[复权因子](https://tushare.pro/document/2?doc_id=28)、[每日指标](https://tushare.pro/document/2?doc_id=32)、[分红](https://tushare.pro/document/2?doc_id=103)、[停复牌](https://tushare.pro/document/2?doc_id=214)、[涨跌停](https://tushare.pro/document/2?doc_id=183)、[指数](https://tushare.pro/document/2?doc_id=95)。
+
+腾讯原始日线进行了六次小请求，原始响应只保存在本机output目录。以下是实际返回范围，不推断缺行原因。
+
+| 请求 | 结果 | 核对 |
+|---|---|---|
+| 600000.SH，2025-01-02 | 1行 | 收10.13，量78,907,100股，额803,904,000元 |
+| 688001.SH，2025-01-02 | 1行 | 收26.29，量3,159,224股，额83,885,500元 |
+| 920599.BJ，2026-11-02 | 1行 | 收18.70，量3,645,400股，额67,869,300元 |
+| 000029.SZ，2020-03-12 | 请求日缺行 | 未使用腾讯缺行证明停牌，待独立状态证据 |
+| 600848.SH，2018-05-23 | 1行 | 收23.35，量2,635,683股，额61,826,100元；事件仍待公告核对 |
+| 600001.SH，2010-02-26 | 请求日缺行 | 返回其他历史行；不认定退市历史已完整 |
+
+腾讯按AKShare当前实现核对原始字段位置；科创板688成交量为股，普通股票为手，金额万元。按成交均价与高低价核对量额数量级，允许报价/金额舍入差；不靠这个检查推断未知单位。原始响应可能忽略起始日期而返回截止日前最多640条，适配器按请求年份分片、再对照明确交易日列表。跨请求同日内容不同会报冲突；只接受day，不把qfqday/hfqday替代原始成交价。
+
+参考：[AKShare腾讯实现](https://github.com/akfamily/akshare/blob/76479ea98ac170b6fbce286c0bb3cfb233c8fbfc/akshare/stock/quote/stock_hist_tx.py)、[量额转换实现](https://github.com/akfamily/akshare/blob/76479ea98ac170b6fbce286c0bb3cfb233c8fbfc/akshare/index/index_stock_zh.py)。本次仅完成普通股/科创/北交小样本和失败分支，尚缺与独立主源逐值对账、真实事件核对及长期稳定性观察，自动备用保持关闭。

@@ -13,7 +13,8 @@ def render_provider_status():
         st.caption('行情、证券资料和公司行为已接入适配器；自动更新尚在接入。')
         if st.button('检查接口权限', key='provider_probe_tushare', disabled=not configured):
             provider = TushareProvider()
-            st.session_state['provider_probe_results'] = [probe_tushare_permission(provider, row['capability']) for row in capabilities]
+            st.session_state['provider_probe_results'] = [probe_tushare_permission(provider, row['capability'])
+                for row in capabilities if row['provider'] == 'tushare']
         labels = {'a_daily_raw': 'A股日线', 'instrument_master': '证券主表', 'market_calendar': '交易日历',
                   'adjustment_factors': '复权因子', 'daily_basic': '每日指标',
                   'dividends': '分红送转', 'suspensions': '停复牌',
@@ -24,3 +25,4 @@ def render_provider_status():
         for row in st.session_state.get('provider_probe_results', []):
             st.caption(f"{labels[row['capability']]} · {statuses.get(row['status'], '待检查')}")
         st.markdown('[数据配置说明](https://tushare.pro/document/1?doc_id=39)')
+        st.caption('腾讯原始日线 · 沪深及北交小样本已检查，自动备用待跨源核对。')

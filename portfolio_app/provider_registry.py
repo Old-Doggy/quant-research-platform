@@ -4,7 +4,7 @@ import os
 
 def provider_capabilities():
     configured = bool(os.environ.get('TUSHARE_TOKEN', '').strip())
-    return [dict(provider='tushare', upstream='Tushare Pro', capability=capability,
+    rows = [dict(provider='tushare', upstream='Tushare Pro', capability=capability,
         credential_status='configured' if configured else 'missing',
         access_status='not_probed' if configured else 'credentials_missing',
         implementation='adapter_ready', live_verified=False,
@@ -18,6 +18,11 @@ def provider_capabilities():
             ('suspensions', 'https://tushare.pro/document/2?doc_id=214'),
             ('price_limits', 'https://tushare.pro/document/2?doc_id=183'),
             ('index_daily', 'https://tushare.pro/document/2?doc_id=95')]]
+    rows.append(dict(provider='tencent', upstream='Tencent Finance', capability='a_daily_raw',
+        credential_status='not_required', access_status='sample_verified', implementation='adapter_ready',
+        live_verified=False, sample_verified_on='2026-11-15', automatic_fallback=False,
+        source_url='https://akshare.akfamily.xyz/data/stock/stock.html'))
+    return rows
 
 
 def probe_tushare_permission(provider, capability):
