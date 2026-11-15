@@ -183,14 +183,14 @@ def validate_tradability(
         raise OfflineExecutionError("price_status is invalid")
     if tradability not in {"tradable", "limit_up", "limit_down", "suspended", "unknown"}:
         raise OfflineExecutionError("tradability is invalid")
+    if tradability == "suspended":
+        return TradabilityResult(False, "suspended")
     if price is None or price_status == "missing":
         return TradabilityResult(False, "missing_price")
     if price_status != "fresh":
         return TradabilityResult(False, "stale_price")
     if tradability == "unknown":
         return TradabilityResult(False, "unknown_tradability")
-    if tradability == "suspended":
-        return TradabilityResult(False, "suspended")
     if tradability == "limit_up" and side == "BUY":
         return TradabilityResult(False, "limit_up_buy_blocked")
     if tradability == "limit_down" and side == "SELL":

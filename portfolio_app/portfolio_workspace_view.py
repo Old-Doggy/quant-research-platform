@@ -173,7 +173,9 @@ def _render_portfolio_workspace(frame, *, context_id, public_mode):
             st.write(f"使用 {len(common_dates)} 个共同交易日，排除 {excluded_rows} 行日期不齐的记录。")
             st.write('日频多头模拟，统一现金账户。手续费、滑点和调仓门槛见高级设置。')
         help_link('数据与方法', _explain_164, key='portfolio_workspace_view_help_164')
-    frames = {s: f.loc[f.trade_date.isin(common_dates)].copy() for s, f in frames.items()}
+    if excluded_rows:
+        st.info('组合标的交易日不齐，请先在数据中心核对缺失日期和停牌记录。')
+        return
     try:
         revision = portfolio_data_fingerprint(frames)
     except ValueError as exc:
@@ -287,6 +289,7 @@ def _render_portfolio_workspace(frame, *, context_id, public_mode):
                     key='portfolio_allocation_chart')
             positions = view["positions"].rename(columns={"trade_date": "日期", "symbol": "标的", "quantity": "股数",
                 "sellable_quantity": "已上市股数",
+                "valuation_status": "估值状态",
                 "market_value": "市值", "close": "收盘价"})
             if positions.empty:
                 st.info("当前筛选无持仓")

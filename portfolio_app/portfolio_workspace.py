@@ -20,6 +20,7 @@ from .strategy_catalog import audit_strategy_input
 from .return_series import require_raw_execution_prices, require_action_free_proxy, build_return_series
 from .corporate_actions import resolve_frame_actions
 from .instrument_rules import resolve_rule_table, InstrumentRuleError
+from .market_sessions import resolve_session_inputs
 
 
 ENGINE = "portfolio-workspace.v1.2"
@@ -55,6 +56,8 @@ def portfolio_data_fingerprint(frames, corporate_actions=(), instrument_rules=No
     digest.update((table.fingerprint if table else 'legacy_assumptions').encode())
     for symbol, frame in sorted(frames.items()):
         digest.update(symbol.encode())
+        if 'session_calendar' in frame.attrs:
+            digest.update(semantic_hash(asdict(frame.attrs['session_calendar'])).encode())
         digest.update(frame.to_csv(index=False, lineterminator="\n").encode())
     return digest.hexdigest()
 
@@ -95,7 +98,8 @@ def _prepare(frames, *, has_actions=False):
 def run_portfolio_workspace(frames, *, recipe: PortfolioRecipe, spec: ExecutionSpec,
                             strategy_key: str, params=None, initial_cash=100000.0, token=None,
                             target_schedule=None, factor_source=None, rebalance_sessions=None,
-                            corporate_actions=(), instrument_rules=None):
+                            corporate_actions=(), instrument_rules=None, session_calendar=None,
+                            participation_rate=1.):
     from .research_display import check_research_size
     check_research_size(pd.concat(list(frames.values()), ignore_index=True) if frames else pd.DataFrame())
     if token:
@@ -108,8 +112,6 @@ def run_portfolio_workspace(frames, *, recipe: PortfolioRecipe, spec: ExecutionS
         raise ValueError("only next-session open/close is supported")
     if spec.price_field != {"next_open": "open", "next_close": "close"}[spec.fill_model]:
         raise ValueError("execution policy and price field disagree")
-    integrity = {symbol: (audit_strategy_input(frame, strategy_key) if target_schedule is None
-                         else audit_research_input(frame)) for symbol, frame in frames.items()}
     for frame in frames.values():
         require_raw_execution_prices(frame)
     from .entitlement_ledger import EntitlementBook
@@ -117,7 +119,12 @@ def run_portfolio_workspace(frames, *, recipe: PortfolioRecipe, spec: ExecutionS
     actions = entitlement_book.actions
     if any(action.symbol not in frames for action in actions):
         raise PortfolioDataError('公司行为证券不在研究范围')
-    prepared, sessions = _prepare(frames, has_actions=bool(actions))
+    session_frames, tradability, session_volumes, price_status, market_metadata = resolve_session_inputs(frames, session_calendar)
+    if isinstance(participation_rate, bool) or not isinstance(participation_rate, (int, float)) or not 0 < participation_rate <= 1:
+        raise PortfolioDataError('成交量参与率必须在0到1之间')
+    integrity = {symbol: (audit_strategy_input(frame, strategy_key) if target_schedule is None
+                         else audit_research_input(frame)) for symbol, frame in session_frames.items()}
+    prepared, sessions = _prepare(session_frames, has_actions=bool(actions))
     rule_table = resolve_rule_table(frames, instrument_rules)
     if spec.asset_type == 'etf' and rule_table is None:
         raise InstrumentRuleError('ETF需要明确类别和有效期的证券规则，不能统一按T+0成交')
@@ -155,7 +162,8 @@ def run_portfolio_workspace(frames, *, recipe: PortfolioRecipe, spec: ExecutionS
             plan = plan_portfolio_orders(pending, sessions=sessions[index - 1:index + 1],
                 spec=spec, recipe=recipe, initial_cash=cash, initial_positions=positions,
                 prices=execution_prices, rules=rules, allow_partial_fill=True,
-                locked_positions=entitlement_book.locked_quantities(date))
+                locked_positions=entitlement_book.locked_quantities(date), tradability=tradability,
+                price_status=price_status, session_volumes=session_volumes, participation_rate=participation_rate)
             for event in plan.events:
                 row = {**asdict(event), 'decision_date': sessions[index - 1]}
                 orders.append(row)
@@ -185,6 +193,7 @@ def run_portfolio_workspace(frames, *, recipe: PortfolioRecipe, spec: ExecutionS
             if qty:
                 snapshots.append(dict(trade_date=date, symbol=symbol, quantity=qty,
                     sellable_quantity=qty - entitlement_book.locked_quantities(date).get(symbol, 0),
+                    valuation_status=prepared[symbol].iloc[index].valuation_status,
                     close=prices[symbol][date], market_value=qty * prices[symbol][date]))
         pending = []
         if rebalance_sessions is not None and date not in rebalance_sessions:
@@ -215,6 +224,8 @@ def run_portfolio_workspace(frames, *, recipe: PortfolioRecipe, spec: ExecutionS
     config = dict(recipe=recipe.to_dict(), execution=asdict(spec), strategy_key=strategy_key,
         params=dict(params or {}), initial_cash=initial_cash,
         corporate_actions=[asdict(action) for action in actions])
+    config['market_sessions'] = market_metadata
+    config['participation_rate'] = participation_rate
     if rule_table is not None:
         config['instrument_rules'] = rule_table.to_dicts()
     if factor_source is not None:
@@ -223,6 +234,7 @@ def run_portfolio_workspace(frames, *, recipe: PortfolioRecipe, spec: ExecutionS
         rule_table.to_dicts() if rule_table else None), sessions=list(sessions), symbols=sorted(prepared),
         missing_symbols=list(resolved.missing_symbols), engine=ENGINE)
     inputs['dataset'] = next(iter(prepared.values())).attrs.get('research_dataset', {})
+    inputs['market_sessions'] = market_metadata
     inputs['instrument_rules'] = dict(status='explicit', fingerprint=rule_table.fingerprint) if rule_table else dict(
         status='legacy_assumptions', note='仅使用显式资产类型及整手/T+假设，未核验证券历史规则或交易税')
     inputs['integrity'] = integrity
@@ -238,7 +250,7 @@ def run_portfolio_workspace(frames, *, recipe: PortfolioRecipe, spec: ExecutionS
         fills=len(fills), rejected=sum(o["status"] == "REJECTED" for o in orders),
         sharpe=accounting.risk.get("sharpe"))
     return PortfolioWorkspaceResult(accounting, pd.DataFrame(snapshots,
-        columns=["trade_date", "symbol", "quantity", "sellable_quantity", "close", "market_value"]), orders, fills, inputs, config, metrics)
+        columns=["trade_date", "symbol", "quantity", "sellable_quantity", "valuation_status", "close", "market_value"]), orders, fills, inputs, config, metrics)
 
 
 def portfolio_drilldown(result, *, date, symbol=None):
@@ -266,7 +278,7 @@ def portfolio_drilldown(result, *, date, symbol=None):
 
 
 def portfolio_scenarios(frames, *, recipe, spec, strategy_key, params=None, initial_cash=100000, variants=(), token=None,
-                        corporate_actions=(), instrument_rules=None):
+                        corporate_actions=(), instrument_rules=None, session_calendar=None, participation_rate=1.):
     corporate_actions = tuple(corporate_actions)
     rows = []
     names = ["baseline", *(v[0] for v in variants)]
@@ -292,7 +304,8 @@ def portfolio_scenarios(frames, *, recipe, spec, strategy_key, params=None, init
                 raise ValueError("unknown assumption")
             result = run_portfolio_workspace(frames, recipe=candidate_recipe, spec=candidate_spec,
                 strategy_key=strategy_key, params=params, initial_cash=initial_cash, token=token,
-                corporate_actions=corporate_actions, instrument_rules=instrument_rules)
+                corporate_actions=corporate_actions, instrument_rules=instrument_rules,
+                session_calendar=session_calendar, participation_rate=participation_rate)
             row.update(status="available", **result.metrics, config=result.config, data_sha256=result.inputs["data_sha256"])
         except (ValueError, KeyError) as exc:
             from .research_diagnostics import capture_error

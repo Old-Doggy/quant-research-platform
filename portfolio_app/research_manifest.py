@@ -24,6 +24,7 @@ _ENGINE_FILES = ('research.py', 'backtest.py', 'strategies.py', 'indicators.py',
                  'factor_contracts.py', 'factor_workspace.py', 'factor_processing.py', 'strategy_catalog.py', 'return_series.py',
                  'corporate_actions.py', 'entitlement_ledger.py',
                  'instrument_rules.py',
+                 'market_sessions.py',
                  'factor_research_result.py', 'portfolio.py', 'portfolio_attribution.py',
                  'portfolio_risk.py', 'performance_metrics.py', 'factor_rank_strategy.py')
 
