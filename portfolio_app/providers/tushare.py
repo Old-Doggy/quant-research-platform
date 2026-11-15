@@ -160,6 +160,10 @@ class TushareProvider:
                  included_statuses=['L', 'D', 'P'], source_url='https://tushare.pro/document/2?doc_id=25'), 'complete')
 
     def calendar(self, market, start, end, *, generation):
+        batch = self.calendar_batch(market, start, end, generation=generation)
+        return MarketCalendar.from_tushare(batch.raw, market=market, source='tushare.trade_cal', generation=generation)
+
+    def calendar_batch(self, market, start, end, *, generation):
         _date(start)
         _date(end)
         if start > end:
@@ -170,4 +174,8 @@ class TushareProvider:
             raise ProviderError('truncated_response', '交易日历达到接口上限，请缩小日期区间')
         result = MarketCalendar.from_tushare(raw, market=market, source='tushare.trade_cal', generation=generation)
         result.sessions(start, end)  # Require requested edges, not just contiguous returned rows.
-        return result
+        frame = pd.DataFrame(result.days, columns=['session', 'is_open'])
+        frame['market'] = market
+        return ProviderBatch(frame, raw, dict(provider='tushare', endpoint='trade_cal', market=market,
+            batch_id=result.fingerprint, calendar=result.to_dict(),
+            source_url='https://tushare.pro/document/2?doc_id=26'), 'complete')

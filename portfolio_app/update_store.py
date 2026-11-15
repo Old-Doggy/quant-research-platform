@@ -127,6 +127,16 @@ class UpdateStore:
             rows = db.execute('SELECT * FROM shards WHERE job=? ORDER BY rowid', (job,)).fetchall()
         return [{**dict(r), 'payload': json.loads(r['payload'])} for r in rows]
 
+    def request(self, job):
+        with self.connect() as db:
+            row = db.execute('SELECT request FROM jobs WHERE id=?', (job,)).fetchone()
+        if row is None:
+            raise ValueError('更新任务不存在')
+        request = json.loads(row[0])
+        if 'update-' + identity_hash(request) != job:
+            raise ValueError('更新任务清单校验失败')
+        return request
+
     def history(self, job):
         with self.connect() as db:
             db.row_factory = sqlite3.Row
