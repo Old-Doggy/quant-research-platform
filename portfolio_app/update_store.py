@@ -192,7 +192,7 @@ class UpdateStore:
             if temporary.exists() and temporary.resolve().parent == directory.resolve():
                 shutil.rmtree(temporary)
 
-    def read_artifact(self, artifact):
+    def verify_artifact(self, artifact):
         if not isinstance(artifact, str) or not re.fullmatch(r'batch-[a-f0-9]{64}', artifact):
             raise ValueError('更新批次身份无效')
         directory = self.root / 'batches' / artifact
@@ -201,6 +201,11 @@ class UpdateStore:
                 or set(payload['files']) != {'raw.parquet', 'normalized.parquet'}
                 or any(_digest(directory / name) != digest for name, digest in payload['files'].items())):
             raise ValueError('更新批次内容校验失败')
+        return payload
+
+    def read_artifact(self, artifact):
+        payload = self.verify_artifact(artifact)
+        directory = self.root / 'batches' / artifact
         frame, raw = pd.read_parquet(directory / 'normalized.parquet'), pd.read_parquet(directory / 'raw.parquet')
         frame.attrs = payload['frame_attrs']
         return ProviderBatch(frame, raw, payload['metadata'], payload['completeness'])
