@@ -16,6 +16,7 @@ class AssetRule:
     asset_type: str
     lot_size: int
     t_plus_one: bool
+    sell_tax_bps: float = 0.
 
     def __post_init__(self) -> None:
         if self.asset_type not in {"cn_stock", "hk_stock", "us_stock", "etf"}:
@@ -24,6 +25,10 @@ class AssetRule:
             raise MarketRuleError("lot size must be positive")
         if not isinstance(self.t_plus_one, bool):
             raise MarketRuleError("t_plus_one must be boolean")
+        import math
+        if (isinstance(self.sell_tax_bps, bool) or not isinstance(self.sell_tax_bps, (int, float))
+                or not math.isfinite(self.sell_tax_bps) or self.sell_tax_bps < 0):
+            raise MarketRuleError('sell tax must be non-negative finite')
 
 
 @dataclass(frozen=True)

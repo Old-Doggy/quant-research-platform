@@ -170,9 +170,9 @@ def _trade_price(price: float, *, side: str, spec: ExecutionSpec) -> float:
     return value
 
 
-def _trade_value(price: float, quantity: int, *, side: str, spec: ExecutionSpec) -> float:
+def _trade_value(price: float, quantity: int, *, side: str, spec: ExecutionSpec, sell_tax_bps=0.) -> float:
     value = _trade_price(price, side=side, spec=spec) * quantity
-    return value * (1.0 + float(spec.commission_bps) / 10_000.0) if side == "BUY" else value * (1.0 - float(spec.commission_bps) / 10_000.0)
+    return value * (1.0 + float(spec.commission_bps) / 10_000.0) if side == "BUY" else value * (1.0 - (float(spec.commission_bps) + sell_tax_bps) / 10_000.0)
 
 
 def _apply_simulated_fill(
@@ -183,7 +183,8 @@ def _apply_simulated_fill(
     filled: int,
     spec: ExecutionSpec,
 ) -> tuple[float, str | None]:
-    trade_value = _trade_value(candidate["price"], filled, side=candidate["side"], spec=spec)
+    trade_value = _trade_value(candidate["price"], filled, side=candidate["side"], spec=spec,
+                               sell_tax_bps=candidate.get('sell_tax_bps', 0.))
     if candidate["side"] == "BUY":
         if trade_value > cash + 1e-9:
             return cash, "insufficient_cash"
@@ -294,7 +295,8 @@ def plan_portfolio_orders(
         if price is None or not math.isfinite(price) or price <= 0:
             rejected.append({**common, "reason_code": "invalid_price", "reason": _reason_text("invalid_price")})
             continue
-        candidates.append({**common, "price": float(price), "order_index": index})
+        candidates.append({**common, "price": float(price), "order_index": index,
+                           'sell_tax_bps': rules[symbol].sell_tax_bps})
 
     # Capacity is shared by symbol and effective session and is consumed only
     # after a fill is affordable and otherwise valid.
