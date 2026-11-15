@@ -66,6 +66,9 @@ def test_route_query_contains_only_safe_ids_and_round_trips_context():
         "as_of": "2026-02-27",
         "bar_period": "1d",
         "context_id": state.context.context_id,
+        'schema_version': '2.0',
+        'date_end': '2026-02-27',
+        'disclosure_mode': 'public_demo',
     }
     restored = parse_route_query(query)
     assert restored == state

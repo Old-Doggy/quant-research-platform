@@ -1511,11 +1511,12 @@ def main() -> None:
         st.html('<div class="quant-nav-footer">本地研究空间<br>数据 · 验证 · 可视化</div>')
     if selected_workspace != route_state.active_workspace:
         next_state = switch_workspace(route_state, selected_workspace)
-        st.query_params.clear()
-        st.query_params.update(navigation_query(next_state))
+        st.query_params.from_dict(navigation_query(next_state))
         st.rerun()
     if route_warning:
         st.warning(route_warning)
+    if 'context_ref' in st.query_params:
+        st.caption('此研究范围保存在本机；跨机器使用时请重新选择范围。')
     # Reserve the status location, then fill it after the workspace has
     # updated its state. This prevents a completed run from being labeled with
     # the status from the previous Streamlit rerun.

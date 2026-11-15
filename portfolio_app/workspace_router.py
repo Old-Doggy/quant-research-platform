@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any, Mapping
+from urllib.parse import urlencode
 
 from portfolio_app.research_context import (
     ALLOWED_BAR_PERIODS,
@@ -32,7 +33,9 @@ WORKSPACE_ROUTES = (
 )
 DEFAULT_WORKSPACE = "watch"
 _ROUTE_BY_ID = {route.id: route for route in WORKSPACE_ROUTES}
-_ALLOWED_QUERY_KEYS = frozenset({"workspace", "context_workspace", "dataset_id", "symbol", "symbols", "as_of", "bar_period", "context_id", "strategy_id", "factor_id"})
+_EXTRA_CONTEXT_KEYS = ('date_start', 'date_end', 'disclosure_mode', 'snapshot_id', 'dataset_generation',
+    'price_basis', 'return_definition', 'factor_version', 'universe_id', 'universe_version')
+_ALLOWED_QUERY_KEYS = frozenset({"workspace", "context_workspace", "dataset_id", "symbol", "symbols", "as_of", "bar_period", "context_id", "strategy_id", "factor_id", 'schema_version', 'indicator_ids', 'context_ref', *_EXTRA_CONTEXT_KEYS})
 
 
 @dataclass(frozen=True)
@@ -68,6 +71,7 @@ def encode_route_query(state: WorkspaceState) -> dict[str, str]:
         "as_of": str(context.as_of),
         "bar_period": context.bar_period,
         "context_id": context.context_id,
+        'schema_version': context.schema_version,
     }
     if context.strategy_id is not None:
         query["strategy_id"] = context.strategy_id
@@ -77,6 +81,15 @@ def encode_route_query(state: WorkspaceState) -> dict[str, str]:
         query["symbol"] = context.symbol
     elif context.symbols:
         query["symbols"] = ",".join(context.symbols)
+    for name in _EXTRA_CONTEXT_KEYS:
+        value = getattr(context, name)
+        if value is not None:
+            query[name] = str(value)
+    if context.indicator_ids:
+        query['indicator_ids'] = ','.join(context.indicator_ids)
+    if len(urlencode(query)) > 1800:
+        from .context_store import save_context
+        return {'workspace': state.active_workspace, 'context_ref': save_context(context)}
     return query
 
 
@@ -97,6 +110,11 @@ def parse_route_query(query: Mapping[str, Any]) -> WorkspaceState:
     if unknown:
         raise ContractViolation(f"route query contains unknown field: {sorted(unknown)[0]}")
     workspace = _validate_workspace(query.get("workspace", DEFAULT_WORKSPACE))
+    if 'context_ref' in query:
+        if set(query) - {'workspace', 'context_ref'}:
+            raise ContractViolation('local context link cannot override context fields')
+        from .context_store import restore_context
+        return WorkspaceState(active_workspace=workspace, context=restore_context(query['context_ref']))
     required = ("dataset_id", "as_of")
     missing = [key for key in required if key not in query]
     if missing:
@@ -117,6 +135,15 @@ def parse_route_query(query: Mapping[str, Any]) -> WorkspaceState:
             context_workspace = "strategy"
         elif workspace == "portfolio":
             context_workspace = "portfolio"
+    extras = {name: query[name] for name in _EXTRA_CONTEXT_KEYS if name in query}
+    if 'dataset_generation' in extras:
+        value = extras['dataset_generation']
+        if not isinstance(value, str) or not value.isascii() or not value.isdecimal():
+            raise ContractViolation('dataset_generation must be a non-negative integer')
+        extras['dataset_generation'] = int(value)
+    indicators = query.get('indicator_ids', '')
+    if not isinstance(indicators, str):
+        raise ContractViolation('indicator_ids query must be a comma-separated string')
     context = ResearchContext(
         dataset_id=query["dataset_id"],
         workspace=context_workspace,
@@ -124,8 +151,11 @@ def parse_route_query(query: Mapping[str, Any]) -> WorkspaceState:
         symbols=symbols,
         as_of=query["as_of"],
         bar_period=query.get("bar_period", "1d"),
-        strategy_id=query.get("strategy_id") if context_workspace == "strategy" else None,
-        factor_id=query.get("factor_id") if context_workspace == "factors" else None,
+        strategy_id=query.get("strategy_id"),
+        factor_id=query.get("factor_id"),
+        schema_version=query.get('schema_version', '1.0'),
+        indicator_ids=tuple(indicators.split(',')) if indicators else (),
+        **extras,
     )
     if query.get("context_id") and query["context_id"] != context.context_id:
         raise ContractViolation("route context_id does not match the context fields")
