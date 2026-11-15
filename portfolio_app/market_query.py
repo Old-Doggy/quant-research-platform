@@ -24,7 +24,7 @@ def query_daily(store, snapshot_id, *, symbols, start, end, columns,
         raise ValueError('查询超出快照完整范围')
     started=time.perf_counter()
     # Check every referenced input, including the independent comparison evidence.
-    for artifact in (*manifest['batch_ids'],*manifest['comparison_ids']):
+    for artifact in (*manifest['batch_ids'],*manifest['comparison_ids'],*manifest.get('reference_batch_ids',())):
         store.updates.verify_artifact(artifact)
     parts=[]
     rows=0

@@ -74,6 +74,8 @@ class SnapshotStore:
         for batch in batches:
             if batch.frame.attrs.get('field_units')!=attrs.get('field_units'):
                 raise ValueError('快照批次单位不一致')
+            if batch.frame.attrs.get('normalization',{}).get('profile')!=attrs.get('normalization',{}).get('profile'):
+                raise ValueError('快照批次输出精度profile不一致，需分数据集核对')
             if batch.frame.attrs.get('research_dataset',{}).get('price_basis')!='raw':
                 raise ValueError('快照只接受原始日线')
         parts=[]
@@ -88,7 +90,7 @@ class SnapshotStore:
         return frame,next(iter(providers))
 
     def publish_daily(self, *, dataset_id, batch_ids, comparison_ids, master, calendars,
-                      start, end, symbols):
+                      start, end, symbols, reference_batch_ids=()):
         _validate_dataset_id(dataset_id)
         primary,provider=self._frames(batch_ids)
         secondary,other=self._frames(comparison_ids)
@@ -99,6 +101,8 @@ class SnapshotStore:
         comparison=compare_daily_sources(primary,secondary,primary_provider=provider,secondary_provider=other)
         if comparison['status']!='passed':
             raise ValueError('跨源核对不完整或冲突，未发布快照')
+        for artifact in reference_batch_ids:
+            self.updates.verify_artifact(artifact)
         with self._lock(dataset_id):
             with self.connect() as db:
                 db.execute('BEGIN IMMEDIATE')
@@ -107,6 +111,7 @@ class SnapshotStore:
                 db.execute('INSERT OR REPLACE INTO generations VALUES (?,?)',(dataset_id,generation))
             payload=dict(schema_version='daily-snapshot-store.v1',dataset_id=dataset_id,generation=generation,
                 batch_ids=list(batch_ids),comparison_ids=list(comparison_ids),provider=provider,
+                reference_batch_ids=list(reference_batch_ids),
                 comparison_provider=other,range=dict(start=start,end=end,symbols=sorted(set(symbols))),
                 instrument_master=master.to_dict(),calendars={m:c.to_dict() for m,c in sorted(calendars.items())},
                 checks=dict(coverage=coverage,comparison=comparison),
@@ -151,7 +156,7 @@ class SnapshotStore:
         manifest=self.open(snapshot_id)
         try:
             frame,_=self._frames(manifest['batch_ids'])
-            for artifact in manifest['comparison_ids']:
+            for artifact in (*manifest['comparison_ids'],*manifest.get('reference_batch_ids',())):
                 self.updates.read_artifact(artifact)
         except (OSError,ValueError,KeyError) as exc:
             raise ValueError('快照底层批次缺失或校验失败') from exc
