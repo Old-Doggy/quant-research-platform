@@ -94,24 +94,6 @@ def render_context_status_bar(
     """Render the shared six-field context bar after the workspace has rendered."""
     session_state = st.session_state if session_state is None else session_state
     target = container.container() if container is not None else st
-    target.markdown(
-        """
-        <style>
-          .quant-context-status {
-            display: grid;
-            grid-template-columns: repeat(6, minmax(0, 1fr));
-            gap: 8px; margin: 0 0 14px; padding: 10px 12px;
-            border: 1px solid #D8DEE4; border-radius: 6px;
-            background: #FFFFFF; color: #263238; font-size: 12px; line-height: 1.35;
-          }
-          .quant-context-status span { min-width: 0; overflow-wrap: anywhere; }
-          .quant-context-status b { color: #59666F; font-weight: 600; }
-          @media (max-width: 900px) { .quant-context-status { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
-          @media (max-width: 640px) { .quant-context-status { grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 8px; gap: 7px; } }
-        </style>
-        """,
-        unsafe_allow_html=True,
-    )
     workspace = route_state.active_workspace
     actual = session_state.get(f'_actual_context_{workspace}', {})
     source = resolve_data_source(
@@ -177,7 +159,7 @@ def render_context_status_bar(
                         if label == '截至' else value) for label, value in fields)
     target.markdown(
         "<div class='quant-context-status'>"
-        + "".join(f"<span><b>{label}</b><br>{escape(value)}</span>" for label, value in fields)
+        + "".join(f"<span{' data-context-field=mode' if label.startswith(('模式', 'Mode')) else ''}><b>{label}</b><br>{escape(value)}</span>" for label, value in fields)
         + "</div>",
         unsafe_allow_html=True,
     )

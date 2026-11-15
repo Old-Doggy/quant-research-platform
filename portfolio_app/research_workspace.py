@@ -7,6 +7,7 @@ from typing import Any, TypeVar
 
 from portfolio_app.research_audit_view import register_run
 from portfolio_app.research_charts import build_performance_chart, CHART_CONFIG
+from portfolio_app.workspace_shell import workspace_heading, research_columns
 
 T = TypeVar("T")
 
@@ -216,12 +217,6 @@ def _render_single_strategy_result_payload(
 
 def _render_explicit_research_workspace(route_state) -> None:
     """Render strategy/portfolio research behind an explicit run boundary."""
-    st.html('''<style>
-      [data-testid="stMainBlockContainer"] h1 {font-size:1.7rem;}
-      [data-testid="stMainBlockContainer"] h3 {font-size:1.1rem;}
-      [data-testid="stMetricValue"] {font-size:1.45rem;overflow-wrap:anywhere;}
-      @media(max-width:640px){[data-testid="stMainBlockContainer"]{padding:2.8rem 1rem 1rem;}}
-    </style>''')
     is_portfolio = route_state.active_workspace == "portfolio"
     from portfolio_app.research_audit_view import register_run, render_run_audit
     from portfolio_app.research_dataset import selected_dataset, dataset_metadata, record_context
@@ -232,8 +227,8 @@ def _render_explicit_research_workspace(route_state) -> None:
             context_id=route_state.context.context_id, public_mode=PUBLIC_MODE)
         return
     title = "组合研究" if is_portfolio else "策略研究"
-    st.title(title)
-    settings_column, result_column = st.columns([1, 3.5], gap="large")
+    workspace_heading(title)
+    settings_column, result_column = research_columns('strategy')
     if not PUBLIC_MODE:
         open_factor = st.session_state.pop('_open_factor_strategy', False)
         with settings_column:

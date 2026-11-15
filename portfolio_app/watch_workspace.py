@@ -5,6 +5,7 @@ bridged explicitly through the already loaded local app module.
 """
 from __future__ import annotations
 from portfolio_app.research_help import help_link
+from portfolio_app.workspace_shell import workspace_heading
 
 from collections.abc import Callable, Mapping
 from typing import Any, TypeVar
@@ -41,18 +42,7 @@ def _render_watch_workspace_body(route_state: Any, *, app_globals: Mapping[str, 
     bind_workspace_dependencies(module_globals, app_globals, _WATCH_GLOBALS)
 
     """Current watch implementation, kept intact for incremental extraction."""
-    st.html('''<style>
-    [data-testid="stMainBlockContainer"] {padding: 2.8rem 2rem 2rem;}
-    [data-testid="stMainBlockContainer"] h1 {font-size: 1.7rem; padding-top: 0;}
-    [data-testid="stMetricValue"] {font-size: 1.55rem; white-space: normal; overflow-wrap: anywhere;}
-    [data-testid="stMetricLabel"] {font-size: .8rem;}
-    [data-testid="stMainBlockContainer"] h3 {font-size: 1.1rem;}
-    @media (max-width: 640px) {
-      [data-testid="stMainBlockContainer"] {padding: 2.8rem .75rem 1rem;}
-      [data-testid="stMetricValue"] {font-size: 1.3rem;}
-    }
-    </style>''')
-    st.title("行情与研究")
+    workspace_heading("行情与研究")
     from .research_dataset import selected_dataset, record_context
     registered_frame = selected_dataset(st.session_state, lambda: None)
     route_symbol = route_state.context.symbol
