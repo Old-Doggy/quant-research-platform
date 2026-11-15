@@ -11,12 +11,17 @@ from .update_store import UpdateBusy
 
 
 def execute(request):
-    if not isinstance(request,dict) or set(request)-{'root','symbols','start','end','dataset_id'}:
+    if not isinstance(request,dict) or set(request)-{'root','symbols','start','end','dataset_id','resume_plan'}:
         raise ValueError('更新请求字段无效')
     root=request['root']
     if not isinstance(root,str) or not root:
         raise ValueError('更新目录无效')
     with process_lock(Path(root)/'locks'/'free-refresh.lock'):
+        if 'resume_plan' in request:
+            if set(request)!={'root','resume_plan'}:
+                raise ValueError('重试请求不能改写原计划范围')
+            from .free_refresh_plan import run_plan
+            return run_plan(root,request['resume_plan'],retry=True)
         return refresh_free_daily(root,symbols=request['symbols'],start=request['start'],end=request['end'],
             dataset_id=request.get('dataset_id','free-a-daily'))
 

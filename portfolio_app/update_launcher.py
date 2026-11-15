@@ -15,12 +15,23 @@ from .update_store import UpdateBusy
 
 def launch_free_refresh(root,*,symbols,start,end):
     symbols=validate_free_scope(symbols,start,end)
+    return _launch(root,dict(root=str(Path(root).resolve()),symbols=symbols,start=start,end=end))
+
+
+def launch_retry(root,plan_id):
+    from .free_refresh_plan import read_plan
+    from .snapshot_store import SnapshotStore
+    read_plan(SnapshotStore(root),plan_id)
+    return _launch(root,dict(root=str(Path(root).resolve()),resume_plan=plan_id))
+
+
+def _launch(root,payload):
     directory=Path(root)/'launches'
     directory.mkdir(parents=True,exist_ok=True)
     request_id='refresh-'+uuid4().hex
     request=directory/(request_id+'.request.json')
     result=directory/(request_id+'.result.json')
-    _atomic_write_json(request,dict(root=str(Path(root).resolve()),symbols=symbols,start=start,end=end))
+    _atomic_write_json(request,payload)
     flags=(subprocess.CREATE_NO_WINDOW|subprocess.CREATE_NEW_PROCESS_GROUP) if os.name=='nt' else 0
     child=subprocess.Popen([sys.executable,'-m','portfolio_app.update_cli','--request',str(request),'--result',str(result)],
         cwd=Path(__file__).resolve().parents[1],stdin=subprocess.DEVNULL,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,

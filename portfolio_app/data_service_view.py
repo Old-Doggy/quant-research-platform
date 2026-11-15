@@ -8,7 +8,7 @@ import streamlit as st
 from .provider_status_view import render_provider_status
 from .snapshot_store import SnapshotStore
 from .state_paths import state_root
-from .update_launcher import launch_free_refresh, recent_refreshes, refresh_report
+from .update_launcher import launch_free_refresh, launch_retry, recent_refreshes, refresh_report
 
 
 def market_service_root():
@@ -67,6 +67,22 @@ def _render_update(store):
                 'worker_exited_without_result':'更新进程已退出，未写入完成结果',
                 'status_unreadable':'任务状态文件无法读取', 'local_or_network_error':'本机采集或网络异常'}
             st.caption('原因：'+reasons.get(report['error_code'], '来源请求未完成（'+report['error_code']+'）'))
+        if report.get('jobs'):
+            rows=[]
+            for job in report['jobs']:
+                for part in store.updates.shards(job['job_id']):
+                    rows.append({'来源':store.updates.request(job['job_id'])['provider'],
+                        '证券':part['payload']['symbol'], '状态':part['status'], '尝试次数':part['attempts']})
+            st.dataframe(rows,hide_index=True,width='stretch')
+        if report.get('plan_id') and report['status']=='incomplete':
+            if st.button('只重试未完成分片',key='daily_refresh_retry',disabled=any(r['report']['status']=='awaiting_result' for r in records)):
+                try:
+                    record=launch_retry(store.root,report['plan_id'])
+                    st.session_state['daily_refresh_request']=record['request_id']
+                except (ValueError,OSError,KeyError):
+                    st.error('原计划或参考批次校验失败，未启动重试。')
+                else:
+                    st.rerun()
         if st.button('刷新任务状态', key='daily_refresh_poll'):
             st.rerun()
     if records:

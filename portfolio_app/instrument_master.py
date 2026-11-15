@@ -141,6 +141,12 @@ class InstrumentMaster:
         checksum = payload.pop('checksum', None)
         if checksum != identity_hash(payload) or payload.get('schema_version') != 'instrument-master.v1':
             raise InstrumentMasterError('证券主表校验失败')
+        return cls.from_dict(payload)
+
+    @classmethod
+    def from_dict(cls, payload):
+        if not isinstance(payload, dict) or payload.get('schema_version') != 'instrument-master.v1':
+            raise InstrumentMasterError('证券主表格式无效')
         result = cls()
         for change in payload['changes']:
             result.update(change['observations'], observed_on=change['observed_on'], source=change['source'], batch_id=change['batch_id'],
