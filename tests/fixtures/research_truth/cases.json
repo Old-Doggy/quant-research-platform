@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "purpose": "synthetic_test_only",
+  "cases": [
+    {
+      "id": "cash_dividend_receivable",
+      "kind": "cash_dividend",
+      "input": {"shares": 100, "initial_cash": 100, "pre_close": 10, "ex_close": 9.5, "cash_per_share": 0.5, "tax": 0},
+      "expected": {"initial_equity": 1100, "ex_cash": 100, "receivable": 50, "ex_equity": 1100, "payment_cash": 150, "payment_receivable": 0, "return": 0},
+      "formula": "ex_equity = shares * ex_close + initial_cash + shares * cash_per_share; receivable is not spendable cash",
+      "status": "expected_values_only_engine_integration_T10"
+    },
+    {
+      "id": "bonus_share_locked",
+      "kind": "bonus_share",
+      "input": {"shares": 100, "total_cost": 1200, "pre_close": 12, "bonus_ratio": 0.2, "ex_close": 10},
+      "expected": {"total_shares": 120, "available_before_listing": 100, "locked_shares": 20, "available_after_listing": 120, "total_cost": 1200, "unit_cost": 10, "equity": 1200},
+      "formula": "shares_new = shares * (1 + bonus_ratio); unchanged total_cost; bonus shares cannot be sold before listing",
+      "status": "expected_values_only_engine_integration_T11"
+    },
+    {
+      "id": "suspension_is_not_missing_data",
+      "kind": "suspension",
+      "input": {"shares": 100, "cash": 50, "last_price": 10, "suspended": true, "attempted_buy": 100},
+      "expected": {"equity": 1050, "fills": 0, "shares": 100, "cash": 50, "unknown_gap_is_suspension": false},
+      "formula": "equity = last valid marked price * shares + cash; suspension prohibits fills",
+      "status": "expected_values_only_engine_integration_T13"
+    },
+    {
+      "id": "delisted_in_historical_universe",
+      "kind": "delisting",
+      "input": {"listing_date": "2020-01-02", "last_trade_date": "2025-06-30", "delisting_date": "2025-07-01", "historical_query": "2025-01-02", "later_query": "2025-07-02"},
+      "expected": {"historical_member": true, "later_tradeable": false, "missing_exit_price_is_zero": false},
+      "formula": "membership uses effective listing intervals; absence of exit price is unknown, not zero",
+      "status": "expected_values_only_engine_integration_T17_T35"
+    },
+    {
+      "id": "financial_revision_asof",
+      "kind": "financial_revision",
+      "input": {"versions": [{"available_at": "2025-04-30T09:00:00+08:00", "roe": 8}, {"available_at": "2025-05-15T09:00:00+08:00", "roe": 6}]},
+      "expected": {"before_first_announcement": null, "asof_2025_05_01": 8, "asof_2025_05_16": 6, "old_experiment_value": 8},
+      "formula": "select latest version with available_at <= decision_at; revisions do not overwrite old experiments",
+      "status": "expected_values_only_engine_integration_T08_T34"
+    },
+    {
+      "id": "etf_rule_categories",
+      "kind": "etf_rules",
+      "input": {"a_share_equity_etf": {"same_day_bought": 100}, "verified_t0_etf": {"same_day_bought": 100, "rule_version": "test_only_T0"}},
+      "expected": {"equity_etf_same_day_sellable": 0, "verified_t0_same_day_sellable": 100, "unknown_category_default_t0": false},
+      "formula": "sellable quantity comes from verified instrument category and effective rule version",
+      "status": "expected_values_only_real_rules_pending_T12_T51"
+    }
+  ],
+  "real_event_candidates": [
+    {"symbol": "600848.SH", "record_date": "1995-06-06", "ex_date": "1995-06-07", "stock_dividend_per_share": 0.10, "source": "https://tushare.pro/document/2?doc_id=103", "evidence": "official documentation example captured 2026-11-15", "verification": "supplier_example_only_requires_exchange_announcement_and_market_data_in_M2"}
+  ]
+}
