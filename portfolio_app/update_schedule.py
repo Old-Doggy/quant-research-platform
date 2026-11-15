@@ -18,7 +18,6 @@ def due_windows(now,*,completed):
     if set(completed)-set(WINDOWS):
         raise ValueError('未知更新窗口')
     local=instant.astimezone(ZoneInfo('Asia/Shanghai'))
-    _validate_dataset_id(dataset_id)
     return [window for window in WINDOWS if window<=local.strftime('%H:%M') and window not in completed]
 
 
@@ -27,6 +26,7 @@ def scheduled_daily(root, *, symbols, start, dataset_id='free-a-daily', now=None
     from .daily_refresh import refresh_free_daily, validate_free_scope
     from .free_refresh_plan import run_plan
     from .process_lock import process_lock
+    _validate_dataset_id(dataset_id)
     instant = datetime.now(ZoneInfo('Asia/Shanghai')) if now is None else (
         datetime.fromisoformat(now) if isinstance(now,str) else now)
     if not isinstance(instant,datetime) or instant.tzinfo is None:
