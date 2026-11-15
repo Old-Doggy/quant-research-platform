@@ -10,7 +10,7 @@ from .portfolio_workspace import ENGINE, LIMITATIONS
 
 
 SUMMARY_FIELDS = ("total_return", "max_drawdown", "total_cost", "fills", "rejected", "sharpe")
-PUBLIC_ENGINES = frozenset({"portfolio-workspace.v1", ENGINE})
+PUBLIC_ENGINES = frozenset({"portfolio-workspace.v1", "portfolio-workspace.v1.1", ENGINE})
 
 
 def _clean(value: Any):

@@ -81,6 +81,7 @@ def build_portfolio_accounting(
     industry_by_symbol: Mapping[str, str] | None = None,
     industry_pit_available: bool = False, annualization_sessions: int = 252,
     risk_window: int | None = None,
+    corporate_actions=(),
 ) -> PortfolioAccountingResult:
     """Build a single cash-accounted offline portfolio result."""
     dates = _date_table(dates)
@@ -105,6 +106,8 @@ def build_portfolio_accounting(
         _finite(value, f"cash return on {date}")
 
     cash = starting_cash
+    from .entitlement_ledger import EntitlementBook
+    entitlements = EntitlementBook(corporate_actions)
     positions: dict[str, int] = {}
     previous_cash = starting_cash
     previous_nav = starting_cash
@@ -125,6 +128,7 @@ def build_portfolio_accounting(
             cash_rate = _finite(cash_returns.get(date, 0.0), f"cash return on {date}")
             cash_pnl = previous_cash * cash_rate
             cash += cash_pnl
+        cash += entitlements.open_session(date, positions, lots)
         fees = 0.0
         turnover = 0.0
         for item in by_date[date]:
@@ -168,12 +172,15 @@ def build_portfolio_accounting(
             for symbol, quantity in positions.items()
             if quantity
         }
-        nav = cash + sum(values.values())
+        entitlements.record_close(date, positions, lots)
+        nav = cash + sum(values.values()) + entitlements.receivable
         if not math.isfinite(nav) or nav <= 0:
             raise PortfolioAccountingError(f"NAV must be positive on {date}")
         daily_pnl = nav - previous_nav if index > 0 else nav - starting_cash
         daily_return = daily_pnl / previous_nav if previous_nav > 0 else None
         symbol_pnl: dict[str, float] = dict(realized_by_symbol)
+        for symbol, income in entitlements.income_by_symbol.items():
+            symbol_pnl[symbol] = symbol_pnl.get(symbol, 0.) + income
         symbols_with_lots = {lot["symbol"] for lots_for_leg in lots.values() for lot in lots_for_leg}
         for symbol in symbols_with_lots:
             symbol_pnl[symbol] = symbol_pnl.get(symbol, 0.0) + sum(
@@ -181,6 +188,8 @@ def build_portfolio_accounting(
                 for lots_for_symbol in lots.values() for lot in lots_for_symbol if lot["symbol"] == symbol
             )
         leg_pnl: dict[str, float] = dict(realized_by_leg)
+        for leg, income in entitlements.income_by_leg.items():
+            leg_pnl[leg] = leg_pnl.get(leg, 0.) + income
         for leg, lots_for_leg in lots.items():
             leg_pnl[leg] = leg_pnl.get(leg, 0.0) + sum(int(lot["quantity"]) * (_price(prices, lot["symbol"], date) - float(lot["price"])) for lot in lots_for_leg)
         for symbol, pnl in symbol_pnl.items():
@@ -200,6 +209,7 @@ def build_portfolio_accounting(
         residual = daily_pnl - factor_total
         ledger_rows.append({
             "trade_date": date, "cash": cash, "positions_value": sum(values.values()), "nav": nav,
+            'receivables': entitlements.receivable,
             "daily_return": daily_return, "cash_weight": cash / nav, "gross_exposure": sum(values.values()) / nav,
             "net_exposure": sum(values.values()) / nav, "turnover_notional": turnover,
             "turnover": turnover / previous_nav if previous_nav else 0.0, "cost": fees,
@@ -209,7 +219,7 @@ def build_portfolio_accounting(
             "cash_return": float(cash_returns[date]) if date in cash_returns else math.nan,
             "factor_residual_pnl": residual if factor_values else math.nan,
             "factor_residual_contribution": residual / previous_nav if factor_values and previous_nav else math.nan,
-            "reconciliation_delta": nav - cash - sum(values.values()),
+            "reconciliation_delta": nav - cash - sum(values.values()) - entitlements.receivable,
         })
         previous_cash, previous_nav = cash, nav
         previous_symbol_pnl, previous_leg_pnl = dict(symbol_pnl), dict(leg_pnl)
@@ -252,6 +262,8 @@ def build_portfolio_accounting(
         "factor_status": factor_status,
         "factor_source": factor_source,
         "benchmark_status": benchmark_status,
+        'corporate_action_events': entitlements.events,
+        'dividend_tax': 'gross_before_tax' if entitlements.actions else 'not_applied',
     }
     risk = _risk(ledger, positions, prices, annualization_sessions, risk_window, industry_by_symbol, industry_pit_available)
     return PortfolioAccountingResult(ledger, symbols, legs, factors, risk, diagnostics)

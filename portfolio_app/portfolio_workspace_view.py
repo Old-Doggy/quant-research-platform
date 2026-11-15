@@ -174,7 +174,13 @@ def _render_portfolio_workspace(frame, *, context_id, public_mode):
             st.write('日频多头模拟，统一现金账户。手续费、滑点和调仓门槛见高级设置。')
         help_link('数据与方法', _explain_164, key='portfolio_workspace_view_help_164')
     frames = {s: f.loc[f.trade_date.isin(common_dates)].copy() for s, f in frames.items()}
-    draft = dict(context_id=context_id, input_revision=portfolio_data_fingerprint(frames), recipe=recipe.to_dict(), policy=policy, cost=cost,
+    try:
+        revision = portfolio_data_fingerprint(frames)
+    except ValueError as exc:
+        from .research_diagnostics import show_safe_error
+        show_safe_error(exc, operation='configuration')
+        return
+    draft = dict(context_id=context_id, input_revision=revision, recipe=recipe.to_dict(), policy=policy, cost=cost,
         slippage=slippage, initial_cash=initial_cash, strategy_key=strategy_key, params=params)
     state = sync_draft(st.session_state.get("portfolio_workspace_run"), draft)
     st.session_state["portfolio_workspace_run"] = state
@@ -268,12 +274,15 @@ def _render_portfolio_workspace(frame, *, context_id, public_mode):
             b.metric("股票市值", f"{row.positions_value:,.2f}")
             c.metric("现金权重", f"{row.cash_weight:.1%}")
             d.metric("股票暴露", f"{row.gross_exposure:.1%}")
+            if row.get('receivables', 0.):
+                st.caption(f"应收股息 {row.receivables:,.2f} · 已计入净值，到账后转为可用现金 · 税前")
             def _explain_256():
                 st.caption(f"资金差额 {row.reconciliation_delta:.8f} · 贡献对账 {summary['reconciliation']}")
             help_link('账户对账', _explain_256, key='portfolio_workspace_view_help_256')
             st.subheader(f"{date} · {selected} · 实际持仓")
             if symbol is None and row.nav > 0:
                 st.plotly_chart(build_allocation_chart(view['positions'], cash=float(row.cash), nav=float(row.nav),
+                    receivables=float(row.get('receivables', 0.)),
                     revision=f'allocation-{run_id}-{date}'), width='stretch', config=CHART_CONFIG,
                     key='portfolio_allocation_chart')
             positions = view["positions"].rename(columns={"trade_date": "日期", "symbol": "标的", "quantity": "股数",

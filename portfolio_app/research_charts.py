@@ -104,18 +104,22 @@ def build_turnover_chart(frame: pd.DataFrame, *, window: int = 20,
 
 
 def build_allocation_chart(positions: pd.DataFrame, *, cash: float, nav: float,
-                           revision: str = 'allocation') -> go.Figure:
+                           receivables: float = 0., revision: str = 'allocation') -> go.Figure:
     """Show actual marked holdings and cash as shares of the same account NAV."""
     if nav <= 0:
         raise ValueError('allocation requires positive NAV')
     amounts = positions.groupby('symbol', sort=False)['market_value'].sum(min_count=1)
     amounts = pd.concat([amounts, pd.Series({'现金': cash})])
+    colors = [PALETTE[0]] * (len(amounts) - 1) + ['#94A6BF']
+    if receivables:
+        amounts = pd.concat([amounts, pd.Series({'应收股息': receivables})])
+        colors.append(PALETTE[1])
     fig = go.Figure(go.Bar(x=amounts / nav, y=amounts.index, orientation='h',
         customdata=amounts.tolist(),
-        marker_color=[PALETTE[0]] * (len(amounts) - 1) + ['#94A6BF'],
+        marker_color=colors,
         width=.42, text=[f'{v / nav:.1%}' for v in amounts], textposition='outside', cliponaxis=False,
         hovertemplate='%{y}<br>账户占比 %{x:.1%}<br>市值 %{customdata:,.2f}<extra></extra>'))
-    style_chart(fig, title='持仓与现金', height=max(230, 100 + len(amounts)*32), revision=revision)
+    style_chart(fig, title='账户资产构成' if receivables else '持仓与现金', height=max(230, 100 + len(amounts)*32), revision=revision)
     fig.update_layout(showlegend=False, hovermode='closest', margin=dict(l=18, r=38, t=50, b=38))
     fig.update_xaxes(tickformat='.0%', range=[0, 1], showgrid=True, gridcolor='#E4EAF2')
     fig.update_yaxes(type='category', autorange='reversed', showgrid=False, dtick=1)

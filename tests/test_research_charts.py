@@ -124,6 +124,15 @@ def test_time_series_uses_units_and_never_fills_a_gap():
     assert fig.layout.font.size >= 14
 
 
+def test_allocation_includes_dividend_receivables_in_the_nav_denominator():
+    from portfolio_app.research_charts import build_allocation_chart
+    frame = pd.DataFrame({'symbol': ['AAA'], 'market_value': [950.]})
+    fig = build_allocation_chart(frame, cash=100., nav=1100., receivables=50.)
+    assert list(fig.data[0].y) == ['AAA', '现金', '应收股息']
+    assert sum(fig.data[0].x) == pytest.approx(1.)
+    assert sum(fig.data[0].customdata) == 1100.
+
+
 def test_coverage_counts_unique_sessions_and_exposes_empty_months():
     frame = pd.DataFrame({'symbol':['A','A','A','B','B', 'B'],
         'trade_date':['2025-01-02','2025-01-02','2025-03-04','2025-01-03','2025-03-05',None]})

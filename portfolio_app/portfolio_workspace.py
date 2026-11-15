@@ -18,9 +18,10 @@ from .research_manifest import build_run_manifest
 from .research_integrity import audit_research_input
 from .strategy_catalog import audit_strategy_input
 from .return_series import require_raw_execution_prices, require_action_free_proxy, build_return_series
+from .corporate_actions import resolve_frame_actions
 
 
-ENGINE = "portfolio-workspace.v1.1"
+ENGINE = "portfolio-workspace.v1.2"
 LIMITATIONS = (
     "日频多头离线模拟；订单数量使用决策日收盘价和当时净值。",
     "信号在下一会话成交，卖出优先；余单不自动追单，后续信号重新评估。",
@@ -44,23 +45,26 @@ class PortfolioWorkspaceResult:
     metrics: dict[str, Any]
 
 
-def portfolio_data_fingerprint(frames):
+def portfolio_data_fingerprint(frames, corporate_actions=()):
     """Identify the exact input snapshot, including changes under the same context."""
     digest = hashlib.sha256()
+    from .research_manifest import semantic_hash
+    digest.update(semantic_hash([asdict(a) for a in resolve_frame_actions(frames, corporate_actions)]).encode())
     for symbol, frame in sorted(frames.items()):
         digest.update(symbol.encode())
         digest.update(frame.to_csv(index=False, lineterminator="\n").encode())
     return digest.hexdigest()
 
 
-def _prepare(frames):
+def _prepare(frames, *, has_actions=False):
     if not frames:
         raise PortfolioDataError("portfolio data is empty")
     prepared, sessions = {}, None
     for symbol in sorted(frames):
         frame = frames[symbol].copy()
         require_raw_execution_prices(frame)
-        require_action_free_proxy(frame)
+        if not has_actions:
+            require_action_free_proxy(frame)
         if frame.empty or not {"trade_date", "open", "high", "low", "close"}.issubset(frame):
             raise PortfolioDataError("missing price fields")
         frame["trade_date"] = pd.to_datetime(frame.trade_date, errors="coerce")
@@ -87,7 +91,8 @@ def _prepare(frames):
 
 def run_portfolio_workspace(frames, *, recipe: PortfolioRecipe, spec: ExecutionSpec,
                             strategy_key: str, params=None, initial_cash=100000.0, token=None,
-                            target_schedule=None, factor_source=None, rebalance_sessions=None):
+                            target_schedule=None, factor_source=None, rebalance_sessions=None,
+                            corporate_actions=()):
     from .research_display import check_research_size
     check_research_size(pd.concat(list(frames.values()), ignore_index=True) if frames else pd.DataFrame())
     if token:
@@ -102,7 +107,14 @@ def run_portfolio_workspace(frames, *, recipe: PortfolioRecipe, spec: ExecutionS
         raise ValueError("execution policy and price field disagree")
     integrity = {symbol: (audit_strategy_input(frame, strategy_key) if target_schedule is None
                          else audit_research_input(frame)) for symbol, frame in frames.items()}
-    prepared, sessions = _prepare(frames)
+    for frame in frames.values():
+        require_raw_execution_prices(frame)
+    from .entitlement_ledger import EntitlementBook
+    entitlement_book = EntitlementBook(resolve_frame_actions(frames, corporate_actions))
+    actions = entitlement_book.actions
+    if any(action.symbol not in frames for action in actions):
+        raise PortfolioDataError('公司行为证券不在研究范围')
+    prepared, sessions = _prepare(frames, has_actions=bool(actions))
     params = normalize_strategy_params(strategy_key, params) if target_schedule is None else {}
     resolved = resolve_portfolio_recipe(recipe, set(prepared))
     if resolved.constraint_status != "within_bounds":
@@ -119,14 +131,34 @@ def run_portfolio_workspace(frames, *, recipe: PortfolioRecipe, spec: ExecutionS
     rules = {s: AssetRule(spec.asset_type, recipe.lot_size, spec.asset_type == "cn_stock") for s in prepared}
     cash, positions = float(initial_cash), {}
     orders, fills, snapshots = [], [], []
+    pending = []
+    action_lots = {}
     for index, date in enumerate(sessions):
         if token and index % 20 == 0:
             token.report(.1 + .7 * index / len(sessions), 'simulation')
+        cash += entitlement_book.open_session(date, positions, action_lots)
+        if pending:
+            plan = plan_portfolio_orders(pending, sessions=sessions[index - 1:index + 1],
+                spec=spec, recipe=recipe, initial_cash=cash, initial_positions=positions,
+                prices=execution_prices, rules=rules, allow_partial_fill=True)
+            for event in plan.events:
+                row = {**asdict(event), 'decision_date': sessions[index - 1]}
+                orders.append(row)
+                if event.filled_quantity:
+                    sign = 1 if event.side == 'BUY' else -1
+                    price = event.price * (1 + sign * spec.slippage_bps / 10000)
+                    fills.append(dict(fill_id=event.signal_id, decision_date=sessions[index - 1],
+                        fill_date=event.effective_date, symbol=event.symbol, side=event.side,
+                        quantity=event.filled_quantity, price=price,
+                        fee=price * event.filled_quantity * spec.commission_bps / 10000, leg=event.strategy_id))
+            cash, positions = plan.cash_after, plan.positions_after
+        # Registration uses end-of-session holdings after today's actual fills.
+        action_lots = {s: [dict(symbol=s, quantity=q)] for s, q in positions.items()}
+        entitlement_book.record_close(date, positions, action_lots)
+        pending = []
         if rebalance_sessions is not None and date not in rebalance_sessions:
             continue
-        # Quantities are decided before the next session's prices are known.
-        nav = cash + sum(q * prices[s][date] for s, q in positions.items())
-        intents = []
+        nav = cash + sum(q * prices[s][date] for s, q in positions.items()) + entitlement_book.receivable
         for symbol, weight in resolved.weights.items():
             effective_weight = weight * signals[symbol][index] if target_schedule is None else target_schedule[date][symbol]
             target = int(nav * effective_weight / prices[symbol][date] / recipe.lot_size) * recipe.lot_size
@@ -134,24 +166,17 @@ def run_portfolio_workspace(frames, *, recipe: PortfolioRecipe, spec: ExecutionS
             delta = target - current
             if not delta or abs(delta * prices[symbol][date] / nav) < recipe.min_rebalance_weight:
                 continue
-            intents.append(dict(signal_id=f"{symbol}:{date}", strategy_id=symbol, symbol=symbol,
+            pending.append(dict(signal_id=f"{symbol}:{date}", strategy_id=symbol, symbol=symbol,
                 decision_date=date, side="BUY" if delta > 0 else "SELL", quantity=abs(delta)))
-        if intents:
-            plan = plan_portfolio_orders(intents, sessions=sessions[index:index + 2],
+        if pending and index == len(sessions) - 1:
+            plan = plan_portfolio_orders(pending, sessions=sessions[index:index + 1],
                 spec=spec, recipe=recipe, initial_cash=cash, initial_positions=positions,
                 prices=execution_prices, rules=rules, allow_partial_fill=True)
             for event in plan.events:
                 row = {**asdict(event), "decision_date": date}
                 orders.append(row)
-                if event.filled_quantity:
-                    sign = 1 if event.side == "BUY" else -1
-                    price = event.price * (1 + sign * spec.slippage_bps / 10000)
-                    fills.append(dict(fill_id=event.signal_id, decision_date=date,
-                        fill_date=event.effective_date, symbol=event.symbol, side=event.side,
-                        quantity=event.filled_quantity, price=price,
-                        fee=price * event.filled_quantity * spec.commission_bps / 10000, leg=event.strategy_id))
-            cash, positions = plan.cash_after, plan.positions_after
-    accounting = build_portfolio_accounting(dates=sessions, prices=prices, fills=fills, initial_cash=initial_cash)
+    accounting = build_portfolio_accounting(dates=sessions, prices=prices, fills=fills,
+        initial_cash=initial_cash, corporate_actions=actions)
     if token:
         token.checkpoint()
     # Reconstruct daily holdings from actual fills, never from target weights.
@@ -168,10 +193,11 @@ def run_portfolio_workspace(frames, *, recipe: PortfolioRecipe, spec: ExecutionS
     ledger = accounting.ledger
     total_return = float(ledger.iloc[-1].nav / initial_cash - 1)
     config = dict(recipe=recipe.to_dict(), execution=asdict(spec), strategy_key=strategy_key,
-        params=dict(params or {}), initial_cash=initial_cash)
+        params=dict(params or {}), initial_cash=initial_cash,
+        corporate_actions=[asdict(action) for action in actions])
     if factor_source is not None:
         config['factor_source'] = factor_source
-    inputs = dict(data_sha256=portfolio_data_fingerprint(prepared), sessions=list(sessions), symbols=sorted(prepared),
+    inputs = dict(data_sha256=portfolio_data_fingerprint(prepared, actions), sessions=list(sessions), symbols=sorted(prepared),
         missing_symbols=list(resolved.missing_symbols), engine=ENGINE)
     inputs['dataset'] = next(iter(prepared.values())).attrs.get('research_dataset', {})
     inputs['integrity'] = integrity
@@ -214,7 +240,9 @@ def portfolio_drilldown(result, *, date, symbol=None):
             and (symbol is None or o["symbol"] == symbol)])
 
 
-def portfolio_scenarios(frames, *, recipe, spec, strategy_key, params=None, initial_cash=100000, variants=(), token=None):
+def portfolio_scenarios(frames, *, recipe, spec, strategy_key, params=None, initial_cash=100000, variants=(), token=None,
+                        corporate_actions=()):
+    corporate_actions = tuple(corporate_actions)
     rows = []
     names = ["baseline", *(v[0] for v in variants)]
     if len(names) != len(set(names)):
@@ -238,7 +266,8 @@ def portfolio_scenarios(frames, *, recipe, spec, strategy_key, params=None, init
             elif axis != "baseline":
                 raise ValueError("unknown assumption")
             result = run_portfolio_workspace(frames, recipe=candidate_recipe, spec=candidate_spec,
-                strategy_key=strategy_key, params=params, initial_cash=initial_cash, token=token)
+                strategy_key=strategy_key, params=params, initial_cash=initial_cash, token=token,
+                corporate_actions=corporate_actions)
             row.update(status="available", **result.metrics, config=result.config, data_sha256=result.inputs["data_sha256"])
         except (ValueError, KeyError) as exc:
             from .research_diagnostics import capture_error
