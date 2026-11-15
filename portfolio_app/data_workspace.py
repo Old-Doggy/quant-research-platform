@@ -33,10 +33,18 @@ def render_data_workspace_body(route_state: Any, *, app_globals: Mapping[str, An
 
     """Render the data workflow while keeping existing analysis views available."""
     st.title("数据中心 / Data Center")
-    st.caption("统一完成导入、预览、质量检查和版本登记；数据只在本地研究模式中使用。")
+    st.caption("更新行情、核对覆盖与来源，或导入本地研究数据。")
     if not PUBLIC_MODE:
-        from .provider_status_view import render_provider_status
-        render_provider_status()
+        from .data_service_view import render_data_service
+        imports = render_data_service()
+        if imports is not None:
+            with imports:
+                _render_import_workflow()
+    else:
+        _render_import_workflow()
+
+
+def _render_import_workflow():
 
     with st.expander("数据来源与设置", expanded=False):
         options = ["合成示例", "文件导入"] if PUBLIC_MODE else ["合成示例", "文件导入", "本地行情"]

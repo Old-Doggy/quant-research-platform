@@ -114,6 +114,8 @@ def test_data_workspace_does_not_reuse_previous_source_after_switch(monkeypatch)
     view = _local_data_app().run()
     assert not view.exception
     view.radio(key="workspace_route_selector").set_value("data").run()
+    view.session_state['data_service_tab']='文件导入'
+    view.run()
     view.button(key="confirm_builtin_data").click().run()
     view.button(key="confirm_data_quality").click().run()
     view.button(key="confirm_builtin_version").click().run()

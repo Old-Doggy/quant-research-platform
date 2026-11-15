@@ -137,6 +137,13 @@ def render_context_status_bar(
     elif workspace in {'watch', 'factors', 'strategy', 'portfolio', 'data'} and not actual:
         status.update(data='尚无有效输入 / No valid input', as_of='等待数据 / Awaiting data',
             basis='尚未确认 / Unconfirmed', state='等待有效输入 / Awaiting valid input')
+    if workspace == 'data' and session_state.get('data_service_tab', '更新') != '文件导入' and not public_mode:
+        service = session_state.get('_data_service_context')
+        if service:
+            status.update(data=f"已核对行情 · {service['dataset_id']} / v{service['generation']}",
+                as_of=service['as_of'], basis='原始价 · 日线', state='行情浏览')
+        else:
+            status.update(data='数据服务', as_of='以所选数据集为准', basis='按数据集查看', state='更新与核对')
     fields = (
         ("工作区 / Workspace", status["workspace"]),
         ("数据 / Data", status["data"]),
