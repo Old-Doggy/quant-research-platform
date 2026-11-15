@@ -18,6 +18,11 @@ def provider_capabilities():
             ('suspensions', 'https://tushare.pro/document/2?doc_id=214'),
             ('price_limits', 'https://tushare.pro/document/2?doc_id=183'),
             ('index_daily', 'https://tushare.pro/document/2?doc_id=95')]]
+    rows.extend(dict(provider='tushare',upstream='Tushare Pro',capability=endpoint,
+        credential_status='configured' if configured else 'missing',
+        access_status='not_probed' if configured else 'credentials_missing',implementation='adapter_ready',
+        live_verified=False,source_url=f'https://tushare.pro/document/2?doc_id={doc}')
+        for endpoint,doc in [('income',33),('balancesheet',36),('cashflow',44),('fina_indicator',79)])
     rows.append(dict(provider='tencent', upstream='Tencent Finance', capability='a_daily_raw',
         credential_status='not_required', access_status='not_probed', implementation='adapter_ready',
         last_check_status='sample_verified',
@@ -46,6 +51,8 @@ def probe_tushare_permission(provider, capability):
         'suspensions': ('suspend_d', dict(ts_code='600000.SH', trade_date='20250102'), 'ts_code,trade_date,suspend_type'),
         'price_limits': ('stk_limit', dict(ts_code='600000.SH', trade_date='20250102'), 'ts_code,trade_date,up_limit,down_limit'),
         'index_daily': ('index_daily', dict(ts_code='000300.SH', trade_date='20250102'), 'ts_code,trade_date,close')}
+    requests.update({name:(name,dict(ts_code='600000.SH',period='20241231'),'ts_code,ann_date,end_date')
+        for name in ('income','balancesheet','cashflow','fina_indicator')})
     if capability not in requests:
         raise ValueError('unknown provider capability')
     endpoint, params, fields = requests[capability]
