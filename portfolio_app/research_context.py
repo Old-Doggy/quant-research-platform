@@ -16,7 +16,7 @@ import re
 from typing import Any, Mapping
 
 
-CONTEXT_SCHEMA_VERSION = "1.0"
+CONTEXT_SCHEMA_VERSION = "2.0"
 RUN_SPEC_SCHEMA_VERSION = "1.0"
 EXECUTION_MODE = "offline_research_simulation"
 
@@ -26,6 +26,7 @@ ALLOWED_RUN_TYPES = frozenset({"factor_diagnostic", "backtest", "portfolio_analy
 ALLOWED_ENGINE_IDS = frozenset({"offline_research", "seeded_demo"})
 _ID_RE = re.compile(r"^[a-z][a-z0-9]*(?:[-_][a-z0-9]+)*$")
 _INDICATOR_ID_RE = re.compile(r"^[A-Z][A-Z0-9]*(?:[-_][A-Z0-9]+)*$")
+_VERSION_RE = re.compile(r'^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$')
 _SYMBOL_RE = re.compile(r"^[0-9A-Z]{1,12}\.(?:SH|SZ|BJ|HK|US)$")
 _DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 _FORBIDDEN_TEXT_RE = re.compile(
@@ -117,6 +118,13 @@ class ResearchContext:
     factor_id: str | None = None
     indicator_ids: tuple[str, ...] = ()
     disclosure_mode: str = "public_demo"
+    snapshot_id: str | None = None
+    dataset_generation: int | None = None
+    price_basis: str | None = None
+    return_definition: str | None = None
+    factor_version: str | None = None
+    universe_id: str | None = None
+    universe_version: str | None = None
     schema_version: str = CONTEXT_SCHEMA_VERSION
     context_id: str = field(init=False)
 
@@ -126,8 +134,23 @@ class ResearchContext:
             raise ContractViolation(f"workspace is unknown: {self.workspace}")
         if self.bar_period not in ALLOWED_BAR_PERIODS:
             raise ContractViolation(f"bar_period is invalid: {self.bar_period}")
-        if self.schema_version != CONTEXT_SCHEMA_VERSION:
+        if self.schema_version not in {"1.0", CONTEXT_SCHEMA_VERSION}:
             raise ContractViolation("unsupported context schema_version")
+        for name in ('snapshot_id', 'return_definition', 'universe_id'):
+            value = getattr(self, name)
+            if value is not None:
+                _safe_id(value, name)
+        for name in ('factor_version', 'universe_version'):
+            value = getattr(self, name)
+            if value is not None and (not isinstance(value, str) or not _VERSION_RE.fullmatch(value)):
+                raise ContractViolation(name + ' is not a safe version')
+        if self.dataset_generation is not None and (type(self.dataset_generation) is not int or self.dataset_generation < 0):
+            raise ContractViolation('dataset_generation must be a non-negative integer')
+        if self.price_basis not in {None, 'raw', 'qfq', 'hfq', 'total_return'}:
+            raise ContractViolation('price_basis is invalid')
+        if self.schema_version == '1.0' and any(getattr(self, name) is not None for name in
+                ('snapshot_id', 'dataset_generation', 'price_basis', 'return_definition', 'factor_version', 'universe_id', 'universe_version')):
+            raise ContractViolation('v1 context cannot carry v2 provenance')
         as_of = _date_text(self.as_of, "as_of")
         object.__setattr__(self, "as_of", as_of)
         start = _date_text(self.date_start, "date_start") if self.date_start is not None else None
@@ -154,9 +177,11 @@ class ResearchContext:
         if self.workspace in {"factors", "portfolio"} and len(normalized_symbols) < 2 and self.symbol is None:
             raise ContractViolation(f"{self.workspace} context requires a symbol universe")
 
-        for field_name, value in (("strategy_id", self.strategy_id), ("factor_id", self.factor_id)):
-            if value is not None:
-                _safe_id(value, field_name)
+        if self.strategy_id is not None:
+            _safe_id(self.strategy_id, 'strategy_id')
+        if self.factor_id is not None and (not isinstance(self.factor_id, str)
+                or not re.fullmatch(r'[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*', self.factor_id)):
+            raise ContractViolation('factor_id is not a safe identifier')
         normalized_indicators = tuple(
             item.upper() if isinstance(item, str) and _INDICATOR_ID_RE.fullmatch(item.upper()) else ""
             for item in self.indicator_ids
@@ -176,7 +201,7 @@ class ResearchContext:
         object.__setattr__(self, "context_id", _fingerprint(identity, "ctx-"))
 
     def _identity(self) -> dict[str, Any]:
-        return {
+        values = {
             "schema_version": self.schema_version,
             "dataset_id": self.dataset_id,
             "workspace": self.workspace,
@@ -191,9 +216,50 @@ class ResearchContext:
             "indicator_ids": self.indicator_ids,
             "disclosure_mode": self.disclosure_mode,
         }
+        if self.schema_version == '2.0':
+            # Navigation and display overlays do not change a calculation.
+            values.pop('workspace')
+            values.pop('indicator_ids')
+            values.update({name: getattr(self, name) for name in ('snapshot_id', 'dataset_generation',
+                'price_basis', 'return_definition', 'factor_version', 'universe_id', 'universe_version')})
+        return values
 
     def to_dict(self) -> dict[str, Any]:
-        return {**self._identity(), "context_id": self.context_id}
+        return {**self._identity(), "workspace": self.workspace, "indicator_ids": self.indicator_ids,
+                "context_id": self.context_id}
+
+
+@dataclass(frozen=True)
+class BrowsingState:
+    """Viewport and inspected date; never passed to a research fingerprint."""
+
+    selected_date: str | None = None
+    visible_start: str | None = None
+    visible_end: str | None = None
+
+    def __post_init__(self):
+        for name in ('selected_date', 'visible_start', 'visible_end'):
+            if getattr(self, name) is not None:
+                object.__setattr__(self, name, _date_text(getattr(self, name), name))
+        if self.visible_start and self.visible_end and self.visible_start > self.visible_end:
+            raise ContractViolation('visible_end cannot precede visible_start')
+
+
+@dataclass(frozen=True)
+class ResultReference:
+    """A saved run points to the input identity it actually used."""
+
+    run_id: str
+    context_id: str
+    snapshot_id: str | None
+
+    def __post_init__(self):
+        if not re.fullmatch(r'run-[0-9a-f]{16}', self.run_id):
+            raise ContractViolation('run_id is invalid')
+        if not re.fullmatch(r'ctx-[0-9a-f]{16}', self.context_id):
+            raise ContractViolation('context_id is invalid')
+        if self.snapshot_id is not None:
+            _safe_id(self.snapshot_id, 'snapshot_id')
 
 
 @dataclass(frozen=True)
@@ -261,6 +327,7 @@ def context_from_legacy_params(params: Mapping[str, Any]) -> ResearchContext:
         factor_id=params.get("factor_id"),
         indicator_ids=indicator_ids,
         disclosure_mode=params.get("disclosure_mode", "public_demo"),
+        schema_version='1.0',
     )
 
 
