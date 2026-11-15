@@ -11,14 +11,18 @@ def provider_capabilities():
         source_url=url) for capability, url in [
             ('a_daily_raw', 'https://tushare.pro/document/2?doc_id=27'),
             ('instrument_master', 'https://tushare.pro/document/2?doc_id=25'),
-            ('market_calendar', 'https://tushare.pro/document/2?doc_id=26')]]
+            ('market_calendar', 'https://tushare.pro/document/2?doc_id=26'),
+            ('adjustment_factors', 'https://tushare.pro/document/2?doc_id=28'),
+            ('daily_basic', 'https://tushare.pro/document/2?doc_id=32')]]
 
 
 def probe_tushare_permission(provider, capability):
     from .providers.base import ProviderError
     requests = {'a_daily_raw': ('daily', dict(ts_code='600000.SH', trade_date='20250102'), 'ts_code,trade_date'),
         'instrument_master': ('stock_basic', dict(ts_code='600000.SH'), 'ts_code'),
-        'market_calendar': ('trade_cal', dict(exchange='SSE', start_date='20250102', end_date='20250102'), 'exchange,cal_date,is_open')}
+        'market_calendar': ('trade_cal', dict(exchange='SSE', start_date='20250102', end_date='20250102'), 'exchange,cal_date,is_open'),
+        'adjustment_factors': ('adj_factor', dict(ts_code='600000.SH', trade_date='20250102'), 'ts_code,trade_date,adj_factor'),
+        'daily_basic': ('daily_basic', dict(ts_code='600000.SH', trade_date='20250102'), 'ts_code,trade_date,pb')}
     if capability not in requests:
         raise ValueError('unknown provider capability')
     endpoint, params, fields = requests[capability]
