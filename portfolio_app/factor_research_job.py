@@ -12,7 +12,6 @@ from .factor_contracts import FactorSpec, LabelSpec
 from .factor_group_analysis import build_quantile_groups, compute_group_returns, compute_group_turnover
 from .factor_labels import build_forward_labels
 from .factor_research_result import build_factor_research_result
-from .factor_stability import compute_factor_correlation
 from .factor_strategy_draft import build_factor_strategy_draft
 from .factor_workspace import FactorResearchConfig, preflight_factor_research
 from .research_jobs import CancellationToken, JobStatus, ResearchJob, ResearchJobCoordinator
@@ -168,8 +167,6 @@ class FactorResearchJobService:
         group_returns = compute_group_returns(grouped_frame, return_columns={"forward": "forward_1d"})
         turnover = compute_group_turnover(grouped.data.assign(factor=grouped.data["factor"]))
         token.report(.78, 'analysis')
-        correlation_frame = aligned.data.assign(factor_copy=aligned.data["factor"] * 2.0)
-        correlation = compute_factor_correlation(correlation_frame, factor_columns=["factor", "factor_copy"], min_observations=2)
         detail = aligned.data.copy()
         detail["trade_date"] = detail["trade_date"].dt.strftime("%Y-%m-%d")
         detail_rows = detail.to_dict(orient="records")
@@ -194,7 +191,7 @@ class FactorResearchJobService:
                 "ic_series": ic.data.assign(trade_date=ic.data["trade_date"].dt.strftime("%Y-%m-%d")).to_dict(orient="records"),
                 "group_returns": {"portfolio_type": group_returns.diagnostics["portfolio_type"], "daily": group_returns.daily.assign(trade_date=group_returns.daily["trade_date"].dt.strftime("%Y-%m-%d")).to_dict(orient="records"), "cumulative": group_returns.cumulative.assign(trade_date=group_returns.cumulative["trade_date"].dt.strftime("%Y-%m-%d")).to_dict(orient="records")},
                 "turnover": {"rows": turnover.turnover.to_dict(orient="records"), "coverage": turnover.coverage, "rank_autocorrelation": turnover.rank_autocorrelation},
-                "correlation": {"rows": correlation.matrix.to_dict(orient="records"), "diagnostics": correlation.diagnostics},
+                "correlation": {'status': 'unavailable', 'reason': 'single_factor', 'rows': []},
             },
             "detail": detail_rows,
             "metadata": {"factor_version": selected.version, "label_version": label_spec.version, "engine_id": "factor_research.v1"},

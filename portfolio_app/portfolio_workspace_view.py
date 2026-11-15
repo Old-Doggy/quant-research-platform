@@ -30,6 +30,16 @@ def _finite_float(value):
     return number if math.isfinite(number) else None
 
 
+def align_portfolio_observations(frames, metadata):
+    common_dates = set.intersection(*(set(f.trade_date) for f in frames.values()))
+    excluded_rows = sum(len(f) - int(f.trade_date.isin(common_dates).sum()) for f in frames.values())
+    if excluded_rows:
+        if metadata['source_kind'] != 'synthetic' or any('session_calendar' in f.attrs for f in frames.values()):
+            raise ValueError('组合标的交易日不齐，请先在数据中心核对缺失日期和停牌记录。')
+        frames = {s: f.loc[f.trade_date.isin(common_dates)].copy() for s, f in frames.items()}
+    return frames, common_dates, excluded_rows
+
+
 def build_portfolio_research_summary(result):
     """Build the first-screen portfolio summary from the shared account result."""
     metrics = getattr(result, "metrics", {}) or {}
@@ -166,16 +176,16 @@ def _render_portfolio_workspace(frame, *, context_id, public_mode):
         show_safe_error(exc, operation='configuration')
         return
     frames = {s: frame.loc[frame.symbol.eq(s)].copy() for s in symbols}
-    common_dates = set.intersection(*(set(f.trade_date) for f in frames.values()))
-    excluded_rows = sum(len(f) - int(f.trade_date.isin(common_dates).sum()) for f in frames.values())
+    try:
+        frames, common_dates, excluded_rows = align_portfolio_observations(frames, metadata)
+    except ValueError as exc:
+        st.info(str(exc))
+        return
     with settings_column:
         def _explain_164():
             st.write(f"使用 {len(common_dates)} 个共同交易日，排除 {excluded_rows} 行日期不齐的记录。")
             st.write('日频多头模拟，统一现金账户。手续费、滑点和调仓门槛见高级设置。')
         help_link('数据与方法', _explain_164, key='portfolio_workspace_view_help_164')
-    if excluded_rows:
-        st.info('组合标的交易日不齐，请先在数据中心核对缺失日期和停牌记录。')
-        return
     try:
         revision = portfolio_data_fingerprint(frames)
     except ValueError as exc:

@@ -57,7 +57,10 @@ def test_submit_runs_only_after_preflight_and_exposes_drilldown_blocks() -> None
     result = job.result
     assert result["preflight"]["submittable"] is True
     assert set(result["overview"]) >= {"factor_id", "rows", "valid_ic_sessions", "portfolio_type"}
-    assert {"ic_series", "group_returns", "turnover", "correlation"}.issubset(result["analysis"])
+    assert {"ic_series", "group_returns", "turnover"}.issubset(result["analysis"])
+    assert result['analysis']['correlation'] == {
+        'status': 'unavailable', 'reason': 'single_factor', 'rows': []}
+    assert 'factor_copy' not in str(result)
     assert result["analysis"]["group_returns"]["portfolio_type"] == "research_equal_weight"
     assert service.drilldown(result, trade_date="2026-02-02")["trade_date"] == "2026-02-02"
     assert service.drilldown(result, symbol="AAA")["symbol"] == "AAA"

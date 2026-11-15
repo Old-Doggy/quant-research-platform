@@ -89,3 +89,17 @@ def test_missing_price_fields_use_a_data_error_instead_of_attribute_error():
     _, frame, args = inputs()
     with pytest.raises(ValueError, match='字段'):
         run_portfolio_workspace({'AAA': frame.drop(columns='close')}, **args)
+
+
+def test_ui_alignment_retains_synthetic_demo_but_blocks_real_and_calendar_gaps():
+    from portfolio_app.portfolio_workspace_view import align_portfolio_observations
+    _, frame, args = inputs()
+    frames = {'AAA': frame, 'BBB': frame.iloc[1:].assign(symbol='BBB')}
+    aligned, dates, excluded = align_portfolio_observations(frames, {'source_kind': 'synthetic'})
+    assert len(dates) == 3 and excluded == 1
+    assert all(len(f) == 3 for f in aligned.values())
+    with pytest.raises(ValueError, match='交易日不齐'):
+        align_portfolio_observations(frames, {'source_kind': 'local_market'})
+    frames['AAA'].attrs['session_calendar'] = args['session_calendar']
+    with pytest.raises(ValueError, match='交易日不齐'):
+        align_portfolio_observations(frames, {'source_kind': 'synthetic'})
