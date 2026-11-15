@@ -55,7 +55,7 @@ class InstrumentMaster:
         self.aliases = {}
         self.changes = []
 
-    def update(self, rows, *, observed_on, source, batch_id):
+    def update(self, rows, *, observed_on, source, batch_id, provider_scope=None):
         _date(observed_on)
         if not source or not batch_id:
             raise InstrumentMasterError('证券批次缺少来源或身份')
@@ -67,6 +67,9 @@ class InstrumentMaster:
             incoming = tuple(r if isinstance(r, Instrument) else Instrument(**r) for r in rows)
         except TypeError as exc:
             raise InstrumentMasterError('证券主表字段无效') from exc
+        scope = set(provider_scope) if provider_scope is not None else {i.provider for i in incoming}
+        if not scope or any(not isinstance(p, str) or not p.strip() for p in scope) or not {i.provider for i in incoming} <= scope:
+            raise InstrumentMasterError('证券主表缺少或混入其他来源范围')
         staged, aliases = dict(self.records), dict(self.aliases)
         seen, added, renamed, delisted = set(), [], [], []
         for item in incoming:
@@ -93,11 +96,13 @@ class InstrumentMaster:
                 delisted.append(identity)
             staged[identity] = item
             aliases[key] = identity
-        missing = sorted(r.instrument_id for r in self.records.values() if r.provider in {i.provider for i in incoming}
-                         and r.instrument_id not in seen)
+        missing = sorted({identity for (provider, _), identity in self.aliases.items()
+                          if provider in scope and identity not in seen})
         change = dict(observed_on=observed_on, source=source, batch_id=batch_id, added=sorted(added),
             renamed=sorted(renamed), delisted=sorted(delisted), missing=missing,
             observations=[asdict(r) for r in incoming])
+        if provider_scope is not None:
+            change['provider_scope'] = sorted(scope)
         self.records, self.aliases = staged, aliases
         self.changes.append(change)
         return copy.deepcopy(change)
@@ -138,7 +143,8 @@ class InstrumentMaster:
             raise InstrumentMasterError('证券主表校验失败')
         result = cls()
         for change in payload['changes']:
-            result.update(change['observations'], observed_on=change['observed_on'], source=change['source'], batch_id=change['batch_id'])
+            result.update(change['observations'], observed_on=change['observed_on'], source=change['source'], batch_id=change['batch_id'],
+                          provider_scope=change.get('provider_scope'))
         if result.to_dict() != payload:
             raise InstrumentMasterError('证券主表历史与当前记录校验不一致')
         return result

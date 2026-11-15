@@ -66,3 +66,18 @@ def test_returned_change_records_cannot_modify_master_history():
     snapshot = master.to_dict()
     snapshot['changes'][0]['observations'][0]['name'] = 'also tampered'
     assert master.name_as_observed('CN:SSE:600000', '2025-01-02') == '测试银行'
+
+
+def test_empty_provider_observation_and_cross_provider_aliases_report_missing(tmp_path):
+    from portfolio_app.instrument_master import InstrumentMaster
+    master = InstrumentMaster()
+    master.update([record()], observed_on='2025-01-02', source='synthetic', batch_id='one')
+    master.update([record(provider='other', provider_code='sh600000')], observed_on='2025-01-03',
+        source='other', batch_id='two')
+    change = master.update([], observed_on='2025-01-04', source='synthetic', batch_id='empty',
+        provider_scope=['tushare'])
+    assert change['missing'] == ['CN:SSE:600000']
+    assert len(master.records) == 1
+    path = tmp_path / 'master.json'
+    master.save(path)
+    assert InstrumentMaster.load(path).to_dict() == master.to_dict()
