@@ -17,6 +17,7 @@ from .strategies import generate_signal, normalize_strategy_params
 from .research_manifest import build_run_manifest
 from .research_integrity import audit_research_input
 from .strategy_catalog import audit_strategy_input
+from .return_series import require_raw_execution_prices, require_action_free_proxy, build_return_series
 
 
 ENGINE = "portfolio-workspace.v1.1"
@@ -58,6 +59,8 @@ def _prepare(frames):
     prepared, sessions = {}, None
     for symbol in sorted(frames):
         frame = frames[symbol].copy()
+        require_raw_execution_prices(frame)
+        require_action_free_proxy(frame)
         if frame.empty or not {"trade_date", "open", "high", "low", "close"}.issubset(frame):
             raise PortfolioDataError("missing price fields")
         frame["trade_date"] = pd.to_datetime(frame.trade_date, errors="coerce")
@@ -77,7 +80,7 @@ def _prepare(frames):
                 | (frame.high < frame.low)).any():
             raise PortfolioDataError("inconsistent OHLC prices")
         sessions = dates
-        frame["return"] = frame.close.astype(float).pct_change()
+        frame["return"] = build_return_series(frame)
         prepared[symbol] = frame
     return prepared, sessions
 

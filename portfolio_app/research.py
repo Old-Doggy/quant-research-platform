@@ -8,6 +8,7 @@ import pandas as pd
 
 from .research_manifest import build_run_manifest
 from .strategy_catalog import audit_strategy_input
+from .return_series import build_return_series
 
 from portfolio_app.backtest import run_backtest
 from portfolio_app.data import build_data_quality_report
@@ -106,7 +107,7 @@ def run_portfolio_research(
         if signalled_results and not dates.equals(next(iter(signalled_results.values())).index):
             raise ValueError("portfolio calendar mismatch; align sessions explicitly before research")
         leg_frame = leg_frame.sort_values("trade_date").reset_index(drop=True)
-        leg_frame['return'] = leg_frame.close.pct_change()
+        leg_frame['return'] = build_return_series(leg_frame)
         signalled = generate_signal(leg_frame, strategy_key, params=params)
         result, _ = run_backtest(signalled, transaction_cost=0.0)
         signalled_results[symbol] = result.set_index("trade_date")
@@ -225,7 +226,7 @@ def run_single_stock_research(
         raise ValueError("research data quality requires review before simulation")
     if 'symbol' in source and source.symbol.nunique() != 1:
         raise ValueError('single stock research requires exactly one symbol')
-    source['return'] = source.close.pct_change()
+    source['return'] = build_return_series(source)
     signalled = generate_signal(source, strategy_key, params=normalized_params)
     if token:
         token.report(.5, 'simulation')
@@ -238,7 +239,9 @@ def run_single_stock_research(
     if selected.empty:
         raise ValueError("research date window contains no rows")
     # Buy-and-hold starts at the first visible close, not the previous window's close.
-    selected['return'] = selected.close.pct_change(fill_method=None)
+    selected_returns = build_return_series(selected)
+    selected['return'] = selected_returns
+    selected.attrs['return_contract'] = selected_returns.attrs['return_contract']
 
     result_frame, metrics = run_backtest(
         selected,
@@ -270,6 +273,7 @@ def run_single_stock_research(
         "date_end": result_frame["trade_date"].max().strftime("%Y-%m-%d"),
     }
     diagnostics['integrity'] = integrity
+    diagnostics['return_contract'] = selected.attrs['return_contract']
     diagnostics['run_manifest'] = build_run_manifest(
         frame=source, engine_id='single-stock-close-proxy.v1',
         features={'strategy': strategy_key, 'parameters': normalized_params},

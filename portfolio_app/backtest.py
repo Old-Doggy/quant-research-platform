@@ -99,6 +99,8 @@ def run_backtest(
     if execution_policy not in EXECUTION_POLICIES:
         raise ValueError(f"unknown execution policy: {execution_policy}")
     result = frame.copy()
+    from .return_series import require_action_free_proxy
+    require_action_free_proxy(frame)
     if "return" not in result:
         raise ValueError("backtest frame requires return")
     result["position"] = result["signal"].shift(1).fillna(0)

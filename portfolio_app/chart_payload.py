@@ -332,6 +332,10 @@ def build_ohlcv_payload(
     data_context: dict[str, object] | None = None,
 ) -> dict[str, object]:
     """Build a bounded, local-chart-friendly OHLCV and event payload."""
+    data_context = dict(data_context or {})
+    data_context['price_role'] = 'display_only'
+    if frame.attrs.get('return_contract'):
+        data_context['research_return_contract'] = dict(frame.attrs['return_contract'])
     bars, volume = _normalise_bars(frame, symbol, as_of)
     minimum, maximum, default_maximum = _validate_zoom(min_visible_bars, max_visible_bars, len(bars))
     period_info = _period_info(period, frame, symbol, as_of)

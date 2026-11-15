@@ -102,6 +102,9 @@ def normalise_market_frame(frame: pd.DataFrame, source_name: str = "local data")
     previous_close = result.groupby("ts_code", dropna=False)["close"].shift(1)
     result["pre_close"] = result["pre_close"].fillna(previous_close)
     result["return"] = result.groupby("ts_code", dropna=False)["close"].pct_change(fill_method=None)
+    result.attrs['return_contract'] = dict(definition='price_return_v1', version='1.0',
+        price_basis=frame.attrs.get('research_dataset', {}).get('price_basis', 'unspecified'),
+        action_coverage='unknown', first_observation='missing')
     result["symbol"] = result["ts_code"].fillna("").astype(str)
     return result.reset_index(drop=True)
 
