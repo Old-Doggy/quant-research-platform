@@ -70,6 +70,7 @@ _REASON_TEXT = {
     "invalid_lot": "数量不符合整手规则",
     "insufficient_sellable_qty": "可卖数量不足，受到 T+1 约束",
     "insufficient_position": "持仓数量不足",
+    "corporate_action_locked": "新增股份尚未上市，可卖数量不足",
     "partial_capacity": "容量限制导致部分成交",
     "capacity_exhausted": "会话容量不足",
     "missing_capacity_data": "缺少成交量容量数据",
@@ -210,6 +211,7 @@ def plan_portfolio_orders(
     participation_rate: float = 1.0,
     allow_partial_fill: bool = False,
     rules: Mapping[str, AssetRule],
+    locked_positions: Mapping[str, Any] | None = None,
 ) -> PortfolioOrderPlan:
     """Resolve one portfolio session into auditable simulated order events."""
     if not math.isfinite(float(initial_cash)) or initial_cash < 0:
@@ -236,6 +238,18 @@ def plan_portfolio_orders(
     positions = {str(symbol): int(quantity) for symbol, quantity in (initial_positions or {}).items()}
     acquired = {str(symbol): int(quantity) for symbol, quantity in (acquired_today or {}).items()}
     cash = float(initial_cash)
+    def sellability(candidate, acquired_snapshot):
+        symbol, date = candidate['symbol'], candidate['effective_date']
+        locked = _nested_value(locked_positions, symbol, date, 0)
+        total = positions.get(symbol, 0)
+        if isinstance(locked, bool) or not isinstance(locked, int) or not 0 <= locked <= total:
+            raise PortfolioOrderError('locked quantity must be an integer within position')
+        if candidate['requested_quantity'] > total - locked and candidate['requested_quantity'] <= total:
+            from .offline_market_rules import SellableQuantityResult
+            return SellableQuantityResult(False, 'corporate_action_locked', total - locked)
+        return validate_sellable_quantity(total_quantity=total - locked,
+            acquired_today_quantity=acquired_snapshot.get(symbol, 0),
+            requested_quantity=candidate['requested_quantity'], rule=rules[symbol])
     portfolio_key_by_date: dict[str, str] = {}
     candidates: list[dict[str, Any]] = []
     rejected: list[dict[str, Any]] = []
@@ -301,12 +315,7 @@ def plan_portfolio_orders(
                 if candidate["side"] != "SELL":
                     eligible.append(candidate)
                     continue
-                sellable = validate_sellable_quantity(
-                    total_quantity=positions.get(symbol, 0),
-                    acquired_today_quantity=acquired.get(symbol, 0),
-                    requested_quantity=candidate["requested_quantity"],
-                    rule=rules[symbol],
-                )
+                sellable = sellability(candidate, acquired)
                 if sellable.allowed:
                     eligible.append(candidate)
                 else:
@@ -354,12 +363,7 @@ def plan_portfolio_orders(
             if active_date != first_effective_date:
                 acquired_for_date = {}
         if candidate["side"] == "SELL":
-            sellable = validate_sellable_quantity(
-                total_quantity=positions.get(candidate["symbol"], 0),
-                acquired_today_quantity=acquired_for_date.get(candidate["symbol"], 0),
-                requested_quantity=candidate["requested_quantity"],
-                rule=rules[candidate["symbol"]],
-            )
+            sellable = sellability(candidate, acquired_for_date)
             if not sellable.allowed:
                 before = cash
                 events.append(

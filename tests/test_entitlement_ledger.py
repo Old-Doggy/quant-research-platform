@@ -120,12 +120,15 @@ def test_declared_events_reach_baseline_and_every_scenario():
     frames['AAA'].attrs['corporate_actions'] = [event]
     result = run_portfolio_workspace(frames, recipe=recipe, spec=spec, strategy_key='trend',
         params={'fast_window': 5, 'slow_window': 30}, initial_cash=10000)
-    assert result.config['corporate_actions'] == [event]
+    from dataclasses import asdict
+    from portfolio_app.corporate_actions import normalize_actions
+    normalized = [asdict(a) for a in normalize_actions([event])]
+    assert result.config['corporate_actions'] == normalized
     report = portfolio_scenarios(frames, recipe=recipe, spec=spec, strategy_key='trend',
         params={'fast_window': 5, 'slow_window': 30}, initial_cash=10000,
         variants=[('cost', 'cost', 20)])
     assert report.status.eq('available').all()
-    assert all(config['corporate_actions'] == [event] for config in report.config)
+    assert all(config['corporate_actions'] == normalized for config in report.config)
     assert report.iloc[0].total_return == result.metrics['total_return']
 
 

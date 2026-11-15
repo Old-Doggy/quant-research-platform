@@ -140,7 +140,8 @@ def run_portfolio_workspace(frames, *, recipe: PortfolioRecipe, spec: ExecutionS
         if pending:
             plan = plan_portfolio_orders(pending, sessions=sessions[index - 1:index + 1],
                 spec=spec, recipe=recipe, initial_cash=cash, initial_positions=positions,
-                prices=execution_prices, rules=rules, allow_partial_fill=True)
+                prices=execution_prices, rules=rules, allow_partial_fill=True,
+                locked_positions=entitlement_book.locked_quantities(date))
             for event in plan.events:
                 row = {**asdict(event), 'decision_date': sessions[index - 1]}
                 orders.append(row)
@@ -151,10 +152,24 @@ def run_portfolio_workspace(frames, *, recipe: PortfolioRecipe, spec: ExecutionS
                         fill_date=event.effective_date, symbol=event.symbol, side=event.side,
                         quantity=event.filled_quantity, price=price,
                         fee=price * event.filled_quantity * spec.commission_bps / 10000, leg=event.strategy_id))
+                    previous = action_lots.get(event.symbol, [])
+                    quantity = sum(lot['quantity'] for lot in previous)
+                    basis = sum(lot['quantity'] * lot['price'] for lot in previous)
+                    if event.side == 'BUY':
+                        basis += event.filled_quantity * price
+                    elif quantity:
+                        basis *= (quantity - event.filled_quantity) / quantity
+                    quantity += sign * event.filled_quantity
+                    action_lots[event.symbol] = ([dict(symbol=event.symbol, quantity=quantity,
+                        price=basis / quantity)] if quantity else [])
             cash, positions = plan.cash_after, plan.positions_after
         # Registration uses end-of-session holdings after today's actual fills.
-        action_lots = {s: [dict(symbol=s, quantity=q)] for s, q in positions.items()}
         entitlement_book.record_close(date, positions, action_lots)
+        for symbol, qty in positions.items():
+            if qty:
+                snapshots.append(dict(trade_date=date, symbol=symbol, quantity=qty,
+                    sellable_quantity=qty - entitlement_book.locked_quantities(date).get(symbol, 0),
+                    close=prices[symbol][date], market_value=qty * prices[symbol][date]))
         pending = []
         if rebalance_sessions is not None and date not in rebalance_sessions:
             continue
@@ -179,17 +194,6 @@ def run_portfolio_workspace(frames, *, recipe: PortfolioRecipe, spec: ExecutionS
         initial_cash=initial_cash, corporate_actions=actions)
     if token:
         token.checkpoint()
-    # Reconstruct daily holdings from actual fills, never from target weights.
-    held = {}
-    for date in sessions:
-        for fill in fills:
-            if fill["fill_date"] == date:
-                symbol = fill["symbol"]
-                held[symbol] = held.get(symbol, 0) + (1 if fill["side"] == "BUY" else -1) * fill["quantity"]
-        for symbol, qty in held.items():
-            if qty:
-                snapshots.append(dict(trade_date=date, symbol=symbol, quantity=qty,
-                    close=prices[symbol][date], market_value=qty * prices[symbol][date]))
     ledger = accounting.ledger
     total_return = float(ledger.iloc[-1].nav / initial_cash - 1)
     config = dict(recipe=recipe.to_dict(), execution=asdict(spec), strategy_key=strategy_key,
@@ -213,7 +217,7 @@ def run_portfolio_workspace(frames, *, recipe: PortfolioRecipe, spec: ExecutionS
         fills=len(fills), rejected=sum(o["status"] == "REJECTED" for o in orders),
         sharpe=accounting.risk.get("sharpe"))
     return PortfolioWorkspaceResult(accounting, pd.DataFrame(snapshots,
-        columns=["trade_date", "symbol", "quantity", "close", "market_value"]), orders, fills, inputs, config, metrics)
+        columns=["trade_date", "symbol", "quantity", "sellable_quantity", "close", "market_value"]), orders, fills, inputs, config, metrics)
 
 
 def portfolio_drilldown(result, *, date, symbol=None):

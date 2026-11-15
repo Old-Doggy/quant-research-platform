@@ -286,6 +286,7 @@ def _render_portfolio_workspace(frame, *, context_id, public_mode):
                     revision=f'allocation-{run_id}-{date}'), width='stretch', config=CHART_CONFIG,
                     key='portfolio_allocation_chart')
             positions = view["positions"].rename(columns={"trade_date": "日期", "symbol": "标的", "quantity": "股数",
+                "sellable_quantity": "已上市股数",
                 "market_value": "市值", "close": "收盘价"})
             if positions.empty:
                 st.info("当前筛选无持仓")

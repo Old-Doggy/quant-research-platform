@@ -147,6 +147,8 @@ def build_portfolio_accounting(
             else:
                 if qty > positions.get(symbol, 0):
                     raise PortfolioAccountingError(f"insufficient position for fill {item['fill_id']}")
+                if qty > positions.get(symbol, 0) - entitlements.locked_quantities(date).get(symbol, 0):
+                    raise PortfolioAccountingError('新增股份尚未上市，可卖数量不足')
                 remaining = qty
                 leg_lots = lots.get(leg, [])
                 symbol_lots = [lot for lot in leg_lots if lot["symbol"] == symbol and int(lot["quantity"]) > 0]
@@ -263,7 +265,7 @@ def build_portfolio_accounting(
         "factor_source": factor_source,
         "benchmark_status": benchmark_status,
         'corporate_action_events': entitlements.events,
-        'dividend_tax': 'gross_before_tax' if entitlements.actions else 'not_applied',
+        'dividend_tax': 'gross_before_tax' if any(a.action_type == 'cash_dividend' for a in entitlements.actions) else 'not_applied',
     }
     risk = _risk(ledger, positions, prices, annualization_sessions, risk_window, industry_by_symbol, industry_pit_available)
     return PortfolioAccountingResult(ledger, symbols, legs, factors, risk, diagnostics)
