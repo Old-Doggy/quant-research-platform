@@ -245,8 +245,8 @@ def _render_factor_research(frame, *, public_mode):
             ic = pd.DataFrame(result['analysis']['ic_series'])
             value = 'ic' if 'ic' in ic else 'value'
             if value in ic:
-                fig = build_ic_chart(ic, value=value, revision=result['run_id'])
-                st.plotly_chart(fig, width='stretch', config=CHART_CONFIG)
+                from .factor_drilldown_view import render_ic_drilldown
+                render_ic_drilldown(result)
             turnover_rows = pd.DataFrame(result['analysis']['turnover']['rows'])
             if not turnover_rows.empty and 'turnover' in turnover_rows:
                 st.subheader('高分组成员变化')
