@@ -1,6 +1,7 @@
 """A dated price/volume screen; fixed snapshots never become historical dynamic pools."""
 import math
 import operator
+import copy
 
 from .instrument_master import _date
 from .market_overview import market_overview
@@ -38,6 +39,7 @@ def validate_screen(config):
 
 def screen_daily(frame, *, manifest, config):
     validate_screen(config)
+    config=copy.deepcopy(config)
     if config['snapshot_id']!=manifest['snapshot_id']:
         raise ValueError('筛选的固定版本与行情不一致')
     report=market_overview(frame,manifest=manifest,session=config['session'])

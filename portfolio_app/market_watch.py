@@ -96,7 +96,15 @@ def render_market_watch(route, dependencies):
     st.session_state['_market_watch_route']=(context.dataset_id,chosen)
     if 'market_watch_section' not in st.session_state:
         st.session_state['market_watch_section']='证券行情'
-    section=st.segmented_control('查看内容',['证券行情','范围概览'],key='market_watch_section')
+    section=st.segmented_control('查看内容',['证券行情','范围概览','条件筛选'],key='market_watch_section')
+    if section=='条件筛选':
+        from .screener_view import render_screener
+        selected=render_screener(store,manifest)
+        if selected:
+            st.session_state['market_watch_symbol_'+chosen]=selected
+            st.session_state['_market_watch_open_security']=True
+            st.rerun()
+        return True
     if section=='范围概览':
         from .market_overview_view import render_market_overview
         selected=render_market_overview(store,manifest)

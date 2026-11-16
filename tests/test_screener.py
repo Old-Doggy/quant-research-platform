@@ -62,3 +62,11 @@ def test_exact_snapshot_and_date_scope_are_mandatory():
                    dict(universe_policy='current_survivors'),dict(schema='unknown')):
         with pytest.raises(ValueError):
             screen_daily(frame(),manifest=snapshot(),config=config(**change))
+
+
+def test_receipt_keeps_its_own_condition_values():
+    from portfolio_app.screener import screen_daily
+    options=config(conditions=[dict(field='close',op='ge',value=10.,missing='exclude')])
+    result=screen_daily(frame(),manifest=snapshot(),config=options)
+    options['conditions'][0]['value']=1000.
+    assert result['config']['conditions'][0]['value']==10.
