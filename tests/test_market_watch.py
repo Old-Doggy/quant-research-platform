@@ -50,6 +50,15 @@ def test_live_browsing_tracks_generation_while_pinned_link_and_research_result_s
     assert not restored.exception
     assert not restored.checkbox(key='market_watch_follow').value
     assert restored.session_state['_actual_context_watch']['snapshot_id']==first['snapshot_id']
+    restored.button_group(key='market_watch_section').set_value('范围概览').run()
+    assert not restored.exception
+    assert len(restored.get('plotly_chart'))==2
+    assert restored.session_state['_actual_context_watch']['as_of']=='2025-01-02'
+    assert view.session_state['dashboard_research_submission']==old_result
+    restored.session_state['_market_watch_open_security']=True
+    restored.run()
+    assert restored.button_group(key='market_watch_section').value=='证券行情'
+    assert not restored.exception
 
 
 def test_browsing_context_does_not_reuse_strategy_or_change_previous_context():

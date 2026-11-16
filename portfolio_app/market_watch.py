@@ -60,9 +60,9 @@ def render_market_watch(route, dependencies):
     datasets=sorted({m['dataset_id'] for m in manifests})
     if route.context.dataset_id in datasets and 'market_watch_dataset' not in st.session_state:
         st.session_state['market_watch_dataset']=route.context.dataset_id
-    dataset=st.selectbox('行情数据集',datasets,key='market_watch_dataset',filter_mode=None)
+    dataset_column,left,right,refresh=st.columns([1.2,2,1.15,.8],vertical_alignment='bottom')
+    dataset=dataset_column.selectbox('行情数据集',datasets,key='market_watch_dataset',filter_mode=None)
     versions={m['snapshot_id']:m for m in manifests if m['dataset_id']==dataset}
-    left,right=st.columns([2,1])
     follow=right.checkbox('跟随当前行情版本',value=not explicit,key='market_watch_follow')
     try:
         current=store.current(dataset)
@@ -81,9 +81,28 @@ def render_market_watch(route, dependencies):
     manifest=versions[chosen]
     if current and current['snapshot_id']!=chosen:
         st.info(f"当前行情已更新至v{current['generation']}；这里保留所选v{manifest['generation']}。")
-    if st.button('刷新行情版本',key='market_watch_refresh'):
+    if refresh.button('刷新版本',key='market_watch_refresh'):
         st.rerun()
     scope=manifest['range']
+    if st.session_state.pop('_market_watch_open_security',False):
+        st.session_state['market_watch_section']='证券行情'
+    route_symbol=st.session_state.get('market_watch_symbol_'+chosen,route.context.symbol)
+    if route_symbol not in scope['symbols']:
+        route_symbol=scope['symbols'][0]
+    context=browsing_context(route.context,manifest,route_symbol)
+    query=encode_route_query(build_workspace_state(context,'watch'))
+    if dict(st.query_params)!=query:
+        st.query_params.from_dict(query)
+    st.session_state['_market_watch_route']=(context.dataset_id,chosen)
+    section=st.segmented_control('查看内容',['证券行情','范围概览'],default='证券行情',key='market_watch_section')
+    if section=='范围概览':
+        from .market_overview_view import render_market_overview
+        selected=render_market_overview(store,manifest)
+        if selected:
+            st.session_state['market_watch_symbol_'+chosen]=selected
+            st.session_state['_market_watch_open_security']=True
+            st.rerun()
+        return True
     key='market_watch_symbol_'+chosen
     if key not in st.session_state and route.context.symbol in scope['symbols']:
         st.session_state[key]=route.context.symbol
