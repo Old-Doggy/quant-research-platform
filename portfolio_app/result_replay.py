@@ -50,6 +50,12 @@ def factor_replay_inputs(frame, *, config):
         frame=source, input_identity=_input_identity(source), config=config.to_dict())
 
 
+def comparison_replay_inputs(frame, *, config):
+    source=_source_frame(frame)
+    return dict(schema='research-replay.v1',kind='factor_comparison',revision=computation_revision(),
+        frame=source,input_identity=_input_identity(source),config=copy.deepcopy(config))
+
+
 def _equal_values(expected, actual):
     """Numerics tolerate roundoff; missing observations never compare as zero."""
     if isinstance(expected, dict) and isinstance(actual, dict):
@@ -69,10 +75,26 @@ def replay_saved(store, task_id):
     replay = value.get('replay')
     if not isinstance(replay, dict) or replay.get('schema') != 'research-replay.v1':
         raise ValueError('此结果未保存完整复算输入')
-    if replay.get('kind') not in ('single_stock', 'cash_portfolio', 'factor'):
+    if replay.get('kind') not in ('single_stock', 'cash_portfolio', 'factor','factor_comparison'):
         raise ValueError('此研究类型尚未接入复算')
     if replay.get('revision') != computation_revision():
         raise ValueError('计算或依赖版本已变化，不能按原版本复算')
+    if replay['kind']=='factor_comparison':
+        from .factor_comparison import research_factor_comparison
+        frame=replay.get('frame')
+        if not isinstance(frame,pd.DataFrame) or _input_identity(frame)!=replay.get('input_identity'):
+            raise ValueError('比较输入身份不一致')
+        actual=research_factor_comparison(frame.copy(deep=True),**replay['config'])
+        expected=value.get('comparison',{})
+        try:
+            for key in ('values','daily','cross_section','ic_correlation','ic_series'):
+                pd.testing.assert_frame_equal(actual[key],expected[key],rtol=1e-10,atol=1e-10)
+            for key in ('factor_ids','factors','horizon','start','end','method','aggregation','min_assets','min_ic_dates'):
+                if actual[key]!=expected[key]: raise AssertionError(key)
+        except (AssertionError,KeyError):
+            raise ValueError('多因子比较复算不一致') from None
+        return dict(status='matched',kind='factor_comparison',sessions=actual['values'].trade_date.nunique(),
+            rows=len(actual['values']),curves=len(actual['factors']),trade_events=0)
     if replay['kind'] == 'cash_portfolio':
         return _replay_portfolio(value, replay)
     if replay['kind'] == 'factor':

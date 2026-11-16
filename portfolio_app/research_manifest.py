@@ -16,7 +16,7 @@ SCHEMA = 'run-manifest.v1'
 _ENGINE_FILES = ('research.py', 'backtest.py', 'strategies.py', 'indicators.py',
                  'single_stock_performance.py', 'offline_performance.py',
                  'factor_compute.py', 'factor_labels.py', 'factor_analysis.py',
-                 'factor_group_analysis.py', 'factor_stability.py', 'factor_research_job.py',
+                 'factor_group_analysis.py', 'factor_stability.py', 'factor_research_job.py','factor_comparison.py',
                  'portfolio_workspace.py', 'portfolio_accounting.py', 'portfolio_orders.py',
                  'portfolio_recipe.py', 'offline_execution.py', 'offline_ledger.py',
                  'offline_market_rules.py', 'validation.py', 'research_integrity.py',

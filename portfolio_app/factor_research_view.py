@@ -161,6 +161,12 @@ def _render_factor_research(frame, *, public_mode):
     metadata = dataset_metadata(frame)
     record_context(st.session_state, 'factors', frame)
     st.caption(f"{metadata['dataset_id']} / {metadata['version']} · {frame.symbol.nunique()} 个标的")
+    workspace_view=st.segmented_control('因子视图',['单因子诊断','多因子比较'],
+        default='单因子诊断',key='factor_workspace_view')
+    if workspace_view=='多因子比较':
+        from .factor_comparison_view import render_factor_comparison
+        render_factor_comparison(frame,names={},public_mode=public_mode)
+        return
     settings_column, result_column = st.columns([1, 3.5], gap="large")
     with settings_column:
         st.subheader("研究设置")

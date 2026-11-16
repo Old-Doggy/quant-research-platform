@@ -9,6 +9,12 @@ WORKSPACES = {'strategy': '策略', 'dashboard': '看盘研究', 'portfolio': '�
 def result_projection(value):
     projection = dict(curve=None, ic=None, metrics=value.get('metrics', {}),
         tables={}, manifest=value.get('run_manifest'), parameters=value.get('research_parameters', {}))
+    if 'comparison' in value:
+        comparison=value['comparison']
+        projection['tables']={name:comparison[key].copy() for name,key in [
+            ('每日截面相关','daily'),('截面相关均值','cross_section'),('IC相关','ic_correlation'),
+            ('实际因子值','values'),('IC序列','ic_series')]}
+        return projection
     baseline = value.get('baseline', value.get('result'))
     if baseline is not None and hasattr(baseline, 'accounting'):
         ledger = baseline.accounting.ledger.copy(deep=True)

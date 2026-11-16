@@ -94,7 +94,9 @@ def render_result_history(*, public_mode):
                     from .result_replay import replay_saved
                     with st.spinner('核对保存输入与计算结果…'):
                         report = replay_saved(store, selected)
-                    if report['kind'] == 'factor':
+                    if report['kind']=='factor_comparison':
+                        st.success(f"{report['sessions']:,} 个交易日、{report['rows']:,} 条实际因子记录与相关性结果一致。")
+                    elif report['kind'] == 'factor':
                         st.success(f"{report['sessions']:,} 个交易日、{report['rows']:,} 条截面记录一致；IC、分组收益与换手一致。")
                     else:
                         st.success(f"{report['sessions']:,} 个交易日逐点一致，指标与 {report['trade_events']:,} 条交易记录一致。")
