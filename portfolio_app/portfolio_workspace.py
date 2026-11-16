@@ -272,13 +272,19 @@ def portfolio_drilldown(result, *, date, symbol=None):
     if symbol is not None and symbol not in result.inputs["symbols"]:
         raise ValueError("symbol is outside the run")
     positions = result.positions.loc[result.positions.trade_date.eq(date)].copy()
+    from .portfolio_accounting import _risk
+    curve=ledger.loc[ledger.trade_date.le(date)].copy()
+    saved_risk=result.accounting.risk
+    risk=_risk(curve,dict(zip(positions.symbol,positions.quantity)),
+        {r.symbol:{date:r.close} for r in positions.itertuples()},
+        saved_risk.get('annualization_sessions',252),saved_risk.get('window'),None,False)
     contribution = result.accounting.symbol_contribution
     contribution = contribution.loc[contribution.trade_date.eq(date)].copy()
     if symbol is not None:
         positions = positions.loc[positions.symbol.eq(symbol)]
         contribution = contribution.loc[contribution.symbol.eq(symbol)]
     return dict(ledger=ledger.loc[ledger.trade_date.eq(date)].copy(),
-        curve=ledger.loc[ledger.trade_date.le(date)].copy(), positions=positions,
+        curve=curve, positions=positions,risk=risk,
         contribution=contribution,
         leg_contribution=result.accounting.leg_contribution.loc[
             result.accounting.leg_contribution.trade_date.eq(date)

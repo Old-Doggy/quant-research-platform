@@ -125,3 +125,31 @@ def test_no_future_session_order_remains_visible_on_its_decision_date():
     assert rejected
     view = portfolio_drilldown(result, date=date)
     assert all(o in view["orders"] for o in rejected)
+
+
+def test_drilldown_risk_uses_only_history_through_date_and_whole_account():
+    from portfolio_app.portfolio_accounting import _risk
+    result=run()
+    date=result.fills[0]['fill_date']
+    view=portfolio_drilldown(result,date=date,symbol='AAA')
+    earlier=result.accounting.ledger.loc[result.accounting.ledger.trade_date.le(date)].copy()
+    positions=result.positions.loc[result.positions.trade_date.eq(date)]
+    expected=_risk(earlier,dict(zip(positions.symbol,positions.quantity)),
+        {r.symbol:{date:r.close} for r in positions.itertuples()},252,None,None,False)
+    assert view['risk']==expected
+    assert view['risk']['observations']<result.accounting.risk['observations']
+    assert view['risk']==portfolio_drilldown(result,date=date)['risk']
+    # Mutating all future account rows and the full-period summary must not leak backward.
+    result.accounting.ledger.loc[result.accounting.ledger.trade_date.gt(date),'daily_return']=.9
+    result.accounting.risk['annual_volatility']=999.
+    result.positions.loc[result.positions.trade_date.gt(date),'market_value']=1e12
+    assert portfolio_drilldown(result,date=date)['risk']==expected
+
+
+def test_drilldown_cash_only_and_final_risk_match_saved_account():
+    result=run()
+    start=result.accounting.ledger.trade_date.iloc[0]
+    initial=portfolio_drilldown(result,date=start)['risk']
+    assert initial['status']=='unavailable' and initial['concentration_hhi'] is None
+    final=portfolio_drilldown(result,date=result.accounting.ledger.trade_date.iloc[-1])['risk']
+    assert final==result.accounting.risk

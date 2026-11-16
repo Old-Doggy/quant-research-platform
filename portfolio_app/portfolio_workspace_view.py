@@ -382,7 +382,8 @@ def _render_portfolio_workspace(frame, *, context_id, public_mode):
                 with st.expander('策略贡献明细'):
                     render_paged_table(legs, key="portfolio_leg_contribution")
         with risk_tab:
-            risk = result.accounting.risk
+            risk = view['risk']
+            st.caption(f'截至 {date} · 全组合风险，不随单只标的筛选变化')
             for column, label, key, percent in zip(st.columns(4),
                 ['年化波动', '夏普比率', 'Sortino', '股票集中度'],
                 ['annual_volatility', 'sharpe', 'sortino', 'concentration_hhi'],
@@ -390,16 +391,19 @@ def _render_portfolio_workspace(frame, *, context_id, public_mode):
                 value = _finite_float(risk.get(key))
                 column.metric(label, '—' if value is None else f'{value:.2%}' if percent else f'{value:.2f}')
             def _explain_320():
-                st.write('波动按252个交易日年化。夏普和Sortino衡量单位风险收益；集中度HHI越接近1，持仓越集中。')
+                st.write(f"波动按{risk['annualization_sessions']}个交易日年化。夏普和Sortino衡量单位风险收益；集中度HHI越接近1，持仓越集中。")
                 st.caption(f"有效样本 {risk.get('observations', '—')} · 状态 {risk.get('status', '—')}")
             help_link('风险指标说明', _explain_320, key='portfolio_workspace_view_help_320')
-            exposure = view["ledger"][["trade_date", "cash_weight", "gross_exposure", "net_exposure"]].copy()
+            exposure = view["curve"][["trade_date", "cash_weight", "gross_exposure", "net_exposure"]].copy()
             exposure = envelope_sample(exposure, value="gross_exposure")
             exposure_fig = build_time_series_chart(exposure,
                 {'cash_weight':'现金比例', 'gross_exposure':'股票暴露'}, title='现金与股票暴露',
-                revision=f'exposure-{run_id}')
+                revision=f'exposure-{run_id}-{date}')
+            if (pd.Timestamp(exposure.trade_date.max())-pd.Timestamp(exposure.trade_date.min())).days<90:
+                exposure_fig.update_xaxes(tickformat='%m-%d',nticks=6)
             st.plotly_chart(exposure_fig, width='stretch', key='portfolio_exposure', config=CHART_CONFIG)
-            st.caption(f"期末股票暴露 {summary['gross_exposure']:.2%} · 期末现金权重 {summary['cash_weight']:.2%} · 风险状态 {summary['risk']['status']}")
+            exposure_row=view['ledger'].iloc[0]
+            st.caption(f"{date} 股票暴露 {exposure_row.gross_exposure:.2%} · 现金权重 {exposure_row.cash_weight:.2%}")
         with robust:
             st.caption("每个场景只改变一个假设；结果按预设顺序展示，失败和缺数据场景不计算比较差值。")
             report = state.result["scenarios"].drop(columns=["config", "data_sha256"], errors="ignore")
