@@ -117,6 +117,7 @@ def build_portfolio_accounting(
     realized_by_leg: dict[str, float] = {}
     previous_symbol_pnl: dict[str, float] = {}
     previous_leg_pnl: dict[str, float] = {}
+    previous_income: dict[str,float] = {}
     ledger_rows: list[dict[str, Any]] = []
     symbol_rows: list[dict[str, Any]] = []
     leg_rows: list[dict[str, Any]] = []
@@ -196,8 +197,11 @@ def build_portfolio_accounting(
             leg_pnl[leg] = leg_pnl.get(leg, 0.0) + sum(int(lot["quantity"]) * (_price(prices, lot["symbol"], date) - float(lot["price"])) for lot in lots_for_leg)
         for symbol, pnl in symbol_pnl.items():
             delta = pnl - previous_symbol_pnl.get(symbol, 0.0)
-            if abs(delta) > 1e-15:
-                symbol_rows.append({"trade_date": date, "symbol": symbol, "pnl": float(pnl), "contribution": delta / previous_nav if previous_nav else 0.0, "kind": "symbol"})
+            dividend=entitlements.income_by_symbol.get(symbol,0.)-previous_income.get(symbol,0.)
+            if abs(delta) > 1e-15 or abs(dividend)>1e-15:
+                symbol_rows.append({"trade_date": date, "symbol": symbol, "pnl": float(pnl),
+                    'daily_pnl':delta,'price_pnl':delta-dividend,'dividend_pnl':dividend,
+                    "contribution": delta / previous_nav if previous_nav else 0.0, "kind": "symbol"})
         for leg, pnl in leg_pnl.items():
             delta = pnl - previous_leg_pnl.get(leg, 0.0)
             if abs(delta) > 1e-15:
@@ -209,10 +213,19 @@ def build_portfolio_accounting(
             factor_total += number
             factor_rows.append({"trade_date": date, "factor": str(factor), "pnl": number, "contribution": number / previous_nav if previous_nav else 0.0})
         residual = daily_pnl - factor_total
+        symbol_delta=sum(pnl-previous_symbol_pnl.get(symbol,0.) for symbol,pnl in symbol_pnl.items())
+        dividend_pnl=sum(entitlements.income_by_symbol.values())-sum(previous_income.values())
+        price_pnl=symbol_delta-dividend_pnl
+        contribution_residual=daily_pnl-symbol_delta-cash_pnl+fees
         ledger_rows.append({
             "trade_date": date, "cash": cash, "positions_value": sum(values.values()), "nav": nav,
             'receivables': entitlements.receivable,
             "daily_return": daily_return, "cash_weight": cash / nav, "gross_exposure": sum(values.values()) / nav,
+            'daily_pnl':daily_pnl,'previous_equity':previous_nav,'price_pnl':price_pnl,'dividend_pnl':dividend_pnl,
+            'price_contribution':price_pnl/previous_nav if previous_nav else 0.,
+            'dividend_contribution':dividend_pnl/previous_nav if previous_nav else 0.,
+            'contribution_residual_pnl':contribution_residual,
+            'contribution_residual':contribution_residual/previous_nav if previous_nav else 0.,
             "net_exposure": sum(values.values()) / nav, "turnover_notional": turnover,
             "turnover": turnover / previous_nav if previous_nav else 0.0, "cost": fees,
             "cash_contribution": cash_pnl / previous_nav if previous_nav else 0.0, "cash_pnl": cash_pnl,
@@ -225,9 +238,10 @@ def build_portfolio_accounting(
         })
         previous_cash, previous_nav = cash, nav
         previous_symbol_pnl, previous_leg_pnl = dict(symbol_pnl), dict(leg_pnl)
+        previous_income=dict(entitlements.income_by_symbol)
 
     ledger = pd.DataFrame(ledger_rows)
-    symbols = pd.DataFrame(symbol_rows, columns=["trade_date", "symbol", "pnl", "contribution", "kind"])
+    symbols = pd.DataFrame(symbol_rows, columns=["trade_date", "symbol", "pnl",'daily_pnl','price_pnl','dividend_pnl', "contribution", "kind"])
     legs = pd.DataFrame(leg_rows, columns=["trade_date", "leg", "pnl", "contribution"])
     factors = pd.DataFrame(factor_rows, columns=["trade_date", "factor", "pnl", "contribution"])
     totals = symbols.groupby("trade_date")["contribution"].sum() if not symbols.empty else pd.Series(dtype=float)

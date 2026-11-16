@@ -265,7 +265,7 @@ def _render_portfolio_workspace(frame, *, context_id, public_mode):
         with nav_tab:
             curve = view["curve"].copy()
             curve["unit_nav"] = curve.nav / result.config['initial_cash']
-            curve["drawdown"] = curve.nav / curve.nav.cummax() - 1
+            curve["drawdown"] = curve.nav / curve.nav.cummax().clip(lower=result.config['initial_cash']) - 1
             curve = envelope_sample(curve, value='nav')
             def select_chart_date():
                 from .chart_events import accept_chart_event, plotly_date_event
@@ -327,6 +327,22 @@ def _render_portfolio_workspace(frame, *, context_id, public_mode):
                 render_paged_table(orders, key="portfolio_orders")
             st.caption("成交价格、现金变化和拒单原因来自同一条离线订单链；空交易不会被当作失败。")
         with contribution_tab:
+            from .portfolio_contribution import contribution_period
+            scope=st.segmented_control('贡献期间',['当日','截至所选日'],default='当日',key='portfolio_contribution_period')
+            ledger=result.accounting.ledger
+            first=ledger.trade_date.iloc[0] if scope=='截至所选日' else date
+            required={'price_pnl','dividend_pnl','contribution_residual_pnl'}
+            if required<=set(ledger):
+                report=contribution_period(ledger,initial_cash=result.config['initial_cash'],start=first,end=date)
+                components=report['components']
+                st.plotly_chart(build_metric_bars(components,category='label',value='contribution',
+                    title='组合收益分解',revision=f'account-contribution-{run_id}-{date}-{scope}'),
+                    width='stretch',config=CHART_CONFIG,key='portfolio_account_contribution')
+                st.caption(f"组合收益 {report['total_return']:.2%} · 分项合计 {components.contribution.sum():.2%}")
+                st.download_button('下载收益分解',components.to_csv(index=False).encode('utf-8-sig'),
+                    'portfolio-contribution.csv','text/csv',key='portfolio_components_csv')
+            else:
+                st.caption('此历史批次未保存分项账本，可查看原证券贡献。')
             st.subheader(f"{date} · {selected} · 个股贡献")
             contribution = view["contribution"].rename(columns={"trade_date": "日期", "symbol": "标的",
                 "contribution": "日收益贡献", "pnl": "毛损益", "kind": "贡献类型"})
