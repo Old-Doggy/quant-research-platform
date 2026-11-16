@@ -10,14 +10,14 @@ ADDITIVE_FIELDS={
 }
 
 
-def cumulative_flow_metric(store, *, endpoint, symbol, field, as_of, calendar, mode='ttm', unit):
+def cumulative_flow_metric(store, *, endpoint, symbol, field, as_of, calendar, mode='ttm', unit, provider='tushare'):
     if endpoint not in ADDITIVE_FIELDS or field not in ADDITIVE_FIELDS[endpoint]:
         raise ValueError('该字段不是可累加利润或现金流，不能按累计报表算TTM')
     if unit!='CNY':
         raise ValueError('需先核验所选财务字段为人民币元，不能猜测单位')
     if mode not in {'ttm','single_quarter'}:
         raise ValueError('财务转换仅支持TTM或单季度')
-    options=dict(endpoint=endpoint,symbol=symbol,as_of=as_of,calendar=calendar,report_type='1')
+    options=dict(endpoint=endpoint,symbol=symbol,as_of=as_of,calendar=calendar,report_type='1',provider=provider)
     current=financial_asof(store,**options)
     if current is None:
         return dict(status='unavailable',value=None,reason='no_available_report',inputs=[])

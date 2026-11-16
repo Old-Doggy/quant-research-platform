@@ -5,13 +5,13 @@ from zoneinfo import ZoneInfo
 from .instrument_master import _date
 
 
-def financial_asof(store, *, endpoint, symbol, as_of, calendar, report_type='1', period=None):
+def financial_asof(store, *, endpoint, symbol, as_of, calendar, report_type='1', period=None, provider='tushare'):
     _date(as_of)
     if period is not None: _date(period)
     # Every as-of date must be in actual recorded calendar coverage.
     if not calendar.sessions(as_of,as_of):
         raise ValueError('财务查询需要明确交易日')
-    rows=store.observations(endpoint=endpoint,symbol=symbol)
+    rows=store.observations(endpoint=endpoint,symbol=symbol,provider=provider)
     candidates=[]
     expected_type='indicator' if endpoint=='fina_indicator' else report_type
     for row in rows:

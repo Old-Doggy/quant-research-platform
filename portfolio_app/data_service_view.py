@@ -113,8 +113,8 @@ def _render_update(store):
 
 def render_data_service():
     record_service_context()
-    update, coverage, sources, imports = st.tabs(
-        ['更新', '覆盖与版本', '来源', '文件导入'], key='data_service_tab', on_change='rerun')
+    update, coverage, sources, financial, imports = st.tabs(
+        ['更新', '覆盖与版本', '来源', '财务', '文件导入'], key='data_service_tab', on_change='rerun')
     if update.open:
         with update:
             _render_update(SnapshotStore(market_service_root()))
@@ -125,4 +125,8 @@ def render_data_service():
     if sources.open:
         with sources:
             render_provider_status()
+    if financial.open:
+        with financial:
+            from .financial_view import render_financial_data
+            render_financial_data()
     return imports if imports.open else None

@@ -27,7 +27,10 @@ class FinancialStore:
 
     def ingest(self,batch):
         meta=batch.metadata
-        if meta.get('provider')!='tushare' or meta.get('endpoint') not in FINANCIAL_PROFILES:
+        provider=meta.get('provider')
+        from .providers.sina_financial import FIELDS
+        profiles=FINANCIAL_PROFILES if provider=='tushare' else FIELDS if provider=='sina' else {}
+        if meta.get('endpoint') not in profiles:
             raise ValueError('不是已识别财务来源批次')
         instant=datetime.fromisoformat(meta['fetched_at'])
         if instant.tzinfo is None:
@@ -48,8 +51,10 @@ class FinancialStore:
                 (artifact,meta['endpoint'],meta['symbol'],meta['fetched_at']))
         return artifact
 
-    def observations(self, *, endpoint, symbol):
-        if endpoint not in FINANCIAL_PROFILES:
+    def observations(self, *, endpoint, symbol, provider='tushare'):
+        from .providers.sina_financial import FIELDS
+        profiles=FINANCIAL_PROFILES if provider=='tushare' else FIELDS if provider=='sina' else {}
+        if endpoint not in profiles:
             raise ValueError('未知财务数据集')
         with self.connect() as db:
             refs=db.execute('SELECT artifact,fetched_at FROM financial_batches WHERE endpoint=? AND symbol=? ORDER BY fetched_at,artifact',
@@ -59,6 +64,8 @@ class FinancialStore:
             batch=self.updates.read_artifact(artifact)
             if batch.metadata.get('endpoint')!=endpoint or batch.metadata.get('symbol')!=symbol or batch.metadata.get('fetched_at')!=fetched_at:
                 raise ValueError('财务索引与原始批次不一致')
+            if batch.metadata.get('provider')!=provider:
+                continue
             rows.extend({**{k:(None if pd.isna(v) else v) for k,v in r.items()},'artifact_id':artifact}
                 for r in batch.frame.to_dict('records'))
         return rows
