@@ -17,14 +17,31 @@ def render_result_history(*, public_mode):
         return
     try:
         store = ResultStore(state_root() / 'research_results')
-        records = store.records()
+        records = store.records(limit=100)
     except Exception as exc:
         show_safe_error(exc, operation='archive')
+        return
+    mode=st.segmented_control('实验视图',['单次结果','多次比较','收益与回撤','任务状态'],default='单次结果',key='result_history_mode')
+    if mode=='任务状态':
+        from .experiment_catalog_view import render_task_status
+        render_task_status(state_root())
         return
     if not records:
         st.info('还没有保存结果。在策略、组合或因子页运行研究后，会自动出现在这里。')
         return
-    mode=st.segmented_control('实验视图',['单次结果','多次比较'],default='单次结果',key='result_history_mode')
+    left,right=st.columns([2,1])
+    query=left.text_input('查找记录',key='result_history_search',placeholder='任务编号、工作区或保存日期')
+    workspace=right.selectbox('工作区范围',['全部',*sorted({r['workspace'] for r in records})],
+        format_func=lambda key:WORKSPACES.get(key,key),filter_mode=None,key='result_history_workspace')
+    from .experiment_catalog import filter_records
+    records=filter_records(records,query=query,workspace=None if workspace=='全部' else workspace)
+    if not records:
+        st.caption('没有符合条件的记录。')
+        return
+    if mode=='收益与回撤':
+        from .experiment_catalog_view import render_experiment_scatter
+        render_experiment_scatter(store,records)
+        return
     if mode=='多次比较':
         from .result_comparison_view import render_result_comparison
         render_result_comparison(store,records)
