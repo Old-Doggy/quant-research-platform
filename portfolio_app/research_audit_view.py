@@ -115,7 +115,7 @@ def render_run_comparison(*, public_mode):
     from .research_task_view import session_runner
     journal = session_runner(public_mode=False).journal
     with st.expander('任务记录与中断恢复'):
-        st.caption('重启后仅恢复任务状态，不自动加载计算对象。中断任务请重新显式运行；已下载归档保留完整结果。')
+        st.caption('成功结果在“已保存结果”查看。中断任务保留状态，需要重新运行。')
         try:
             history = journal.records() if journal else []
         except Exception as exc:

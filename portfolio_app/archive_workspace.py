@@ -25,7 +25,14 @@ def render_experiments_workspace(
     if render_body is not None:
         return render_body(route_state, public_mode)
     st.title("实验记录")
-    render_run_comparison(public_mode=public_mode)
+    history, audit = st.tabs(['已保存结果', '口径核对'], on_change='rerun', key='experiments_view')
+    if history.open:
+        with history:
+            from .result_history_view import render_result_history
+            render_result_history(public_mode=public_mode)
+    if audit.open:
+        with audit:
+            render_run_comparison(public_mode=public_mode)
     return None
 
 
