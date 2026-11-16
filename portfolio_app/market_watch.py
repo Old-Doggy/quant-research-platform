@@ -94,7 +94,9 @@ def render_market_watch(route, dependencies):
     if dict(st.query_params)!=query:
         st.query_params.from_dict(query)
     st.session_state['_market_watch_route']=(context.dataset_id,chosen)
-    section=st.segmented_control('查看内容',['证券行情','范围概览'],default='证券行情',key='market_watch_section')
+    if 'market_watch_section' not in st.session_state:
+        st.session_state['market_watch_section']='证券行情'
+    section=st.segmented_control('查看内容',['证券行情','范围概览'],key='market_watch_section')
     if section=='范围概览':
         from .market_overview_view import render_market_overview
         selected=render_market_overview(store,manifest)

@@ -253,9 +253,14 @@
       updateLabels(time || times[lastBar]);
       charts.forEach((other, otherIndex) => {
         if (otherIndex === index) return;
-        const entry = seriesByPane[otherIndex][0];
-        const value = entry.values.get(time);
-        if (time && Number.isFinite(value)) other.chart.setCrosshairPosition(value, time, entry.series);
+        const entry = seriesByPane[otherIndex].find(series => Number.isFinite(series.values.get(time)));
+        const value = entry && entry.values.get(time);
+        // A newly mounted/hidden pane can have values before its scale is ready.
+        // Lightweight Charts 4.2 asserts if either coordinate is still null.
+        const ready = time && entry && Number.isFinite(value)
+          && Number.isFinite(entry.series.priceToCoordinate(value))
+          && Number.isFinite(other.chart.timeScale().timeToCoordinate(time));
+        if (ready) other.chart.setCrosshairPosition(value, time, entry.series);
         else other.chart.clearCrosshairPosition();
       });
     } finally { syncingCrosshair = false; }
