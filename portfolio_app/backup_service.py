@@ -13,6 +13,47 @@ from .snapshot_contracts import identity_hash
 from .snapshot_store import SnapshotStore
 
 
+def _observation_store(root,service):
+    if service=='financial':
+        from .financial_store import FinancialStore
+        return FinancialStore(root/'financial_service')
+    if service=='etf':
+        from .etf_research import ETFStore
+        return ETFStore(root/'etf_service')
+    if service=='convertible':
+        from .convertible_store import ConvertibleStore
+        return ConvertibleStore(root/'convertible_service')
+    raise ValueError('未知观察数据类型')
+
+
+def _observations(root,selection,*,indexed):
+    if not isinstance(selection,dict): raise ValueError('观察批次选择无效')
+    stores={}
+    for service,identifiers in selection.items():
+        store=_observation_store(root,service)
+        if (not isinstance(identifiers,list) or not all(isinstance(v,str) for v in identifiers)
+                or len(identifiers)!=len(set(identifiers))):
+            raise ValueError('观察批次身份重复或无效')
+        for identifier in identifiers:
+            try:
+                batch=store.updates.read_artifact(identifier)
+            except OSError:
+                raise ValueError('观察批次文件缺失或无法读取') from None
+            if indexed:
+                if service=='financial':
+                    with store.connect() as db:
+                        row=db.execute('SELECT endpoint,symbol,fetched_at FROM financial_batches WHERE artifact=?',(identifier,)).fetchone()
+                    if row!=tuple(batch.metadata.get(k) for k in ('endpoint','symbol','fetched_at')):
+                        raise ValueError('财务索引与批次不一致')
+                else:
+                    store.load(identifier)
+            else:
+                # Preserve original bytes; a Parquet roundtrip need not preserve file identity.
+                store.index_existing(identifier)
+        stores[service]=store
+    return stores
+
+
 def _file(root,name):
     if not isinstance(name,str) or '\\' in name:
         raise ValueError('备份文件名无效')
@@ -42,18 +83,26 @@ def _validate_payload(root,payload):
     for identifier in payload['result_ids']:
         manifest=results._manifest(identifier,indexed=False)
         results._decode(manifest,results.root/'runs'/identifier)
+    _observations(root,payload.get('observation_ids',{}),indexed=False)
     return market,results
 
 
-def create_backup(root,target,*,snapshot_ids,result_ids,max_bytes=2_000_000_000):
+def create_backup(root,target,*,snapshot_ids,result_ids,observation_ids=None,max_bytes=2_000_000_000):
     root,target=_destination(root,target)
-    if type(max_bytes) is not int or max_bytes<=0 or not snapshot_ids and not result_ids:
+    observation_ids={} if observation_ids is None else observation_ids
+    if not isinstance(observation_ids,dict): raise ValueError('观察批次选择无效')
+    if type(max_bytes) is not int or max_bytes<=0 or not snapshot_ids and not result_ids and not any(observation_ids.values()):
         raise ValueError('需要选择备份内容并设置正容量预算')
     if len(snapshot_ids)!=len(set(snapshot_ids)) or len(result_ids)!=len(set(result_ids)):
         raise ValueError('备份身份重复')
     market=SnapshotStore(root/'market_service')
     results=ResultStore(root/'research_results')
     files=set()
+    observations=_observations(root,observation_ids,indexed=True)
+    for service,store in observations.items():
+        for identifier in observation_ids[service]:
+            for name in ('manifest.json','raw.parquet','normalized.parquet'):
+                files.add(f'{service}_service/batches/{identifier}/{name}')
     for identifier in snapshot_ids:
         manifest=market.open(identifier)
         market.read_frame(identifier)
@@ -87,11 +136,14 @@ def create_backup(root,target,*,snapshot_ids,result_ids,max_bytes=2_000_000_000)
             hashes[name]=before
         payload=dict(schema='private-research-backup.v1',disclosure='private_local',
             snapshot_ids=list(snapshot_ids),result_ids=list(result_ids),files=hashes,total_bytes=total,
-            scope='selected_immutable_snapshots_and_results',credentials='excluded')
+            observation_ids=observation_ids,scope='selected_immutable_snapshots_results_and_observations',credentials='excluded')
         _validate_payload(staging,payload)
         # Validation creates disposable indexes; rebuild only on restore.
         for name in ('market_service/updates.sqlite3','market_service/snapshots.sqlite3','research_results/results.sqlite3'):
             _file(staging,name).unlink(missing_ok=True)
+        for service in observations:
+            for name in ('updates.sqlite3',service+'.sqlite3'):
+                _file(staging,f'{service}_service/{name}').unlink(missing_ok=True)
         _atomic_write_json(staging/'backup-manifest.json',{**payload,'checksum':identity_hash(payload)})
         os.rename(staging,target)
     return payload
@@ -110,7 +162,8 @@ def restore_backup(source,target,*,max_bytes=2_000_000_000):
     for name,digest in payload['files'].items():
         path=_file(source,name)
         if not name.startswith(('market_service/snapshots/snapshot-','market_service/batches/batch-',
-                                'research_results/runs/')) or file_hash(path)!=digest:
+                                'research_results/runs/','financial_service/batches/batch-',
+                                'etf_service/batches/batch-','convertible_service/batches/batch-')) or file_hash(path)!=digest:
             raise ValueError('备份文件缺失或校验失败')
         total+=path.stat().st_size
     if total!=payload['total_bytes'] or total>max_bytes:
@@ -141,7 +194,8 @@ def restore_backup(source,target,*,max_bytes=2_000_000_000):
             results.load(identifier)
         _atomic_write_json(staging/'restore-receipt.json',{**payload,'checksum':identity_hash(payload)})
         os.rename(staging,target)
-    return dict(status='restored',snapshots=len(payload['snapshot_ids']),results=len(payload['result_ids']))
+    return dict(status='restored',snapshots=len(payload['snapshot_ids']),results=len(payload['result_ids']),
+        observations=sum(map(len,payload.get('observation_ids',{}).values())))
 
 
 def main():
@@ -153,14 +207,17 @@ def main():
     create.add_argument('--target',required=True)
     create.add_argument('--snapshot',action='append',default=[])
     create.add_argument('--result',action='append',default=[])
+    for service in ('financial','etf','convertible'):
+        create.add_argument('--'+service,action='append',default=[])
     restore=commands.add_parser('restore')
     restore.add_argument('--source',required=True)
     restore.add_argument('--target',required=True)
     args=parser.parse_args()
     if args.operation=='create':
-        value=create_backup(args.root,args.target,snapshot_ids=args.snapshot,result_ids=args.result)
+        selected={s:getattr(args,s) for s in ('financial','etf','convertible') if getattr(args,s)}
+        value=create_backup(args.root,args.target,snapshot_ids=args.snapshot,result_ids=args.result,observation_ids=selected)
         report=dict(status='backed_up',snapshots=len(value['snapshot_ids']),results=len(value['result_ids']),
-            bytes=value['total_bytes'],disclosure=value['disclosure'])
+            observations=sum(map(len,selected.values())),bytes=value['total_bytes'],disclosure=value['disclosure'])
     else:
         report=restore_backup(args.source,args.target)
     print(json.dumps(report,ensure_ascii=False))

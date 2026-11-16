@@ -25,7 +25,7 @@ class FinancialStore:
         finally:
             db.close()
 
-    def ingest(self,batch):
+    def validate_batch(self,batch):
         meta=batch.metadata
         provider=meta.get('provider')
         from .providers.sina_financial import FIELDS
@@ -45,11 +45,18 @@ class FinancialStore:
                 values={k:(None if pd.isna(v) else v) for k,v in row.items() if k not in {'fetched_at','report_version'}}
                 if row['report_version']!='financial-'+identity_hash(values):
                     raise ValueError('财务版本身份不符')
-        artifact=self.updates.save_artifact(batch)
+    def index_existing(self,artifact):
+        batch=self.updates.read_artifact(artifact)
+        self.validate_batch(batch)
+        meta=batch.metadata
         with self.connect() as db:
             db.execute('INSERT OR IGNORE INTO financial_batches VALUES (?,?,?,?)',
                 (artifact,meta['endpoint'],meta['symbol'],meta['fetched_at']))
         return artifact
+
+    def ingest(self,batch):
+        self.validate_batch(batch)
+        return self.index_existing(self.updates.save_artifact(batch))
 
     def observations(self, *, endpoint, symbol, provider='tushare'):
         from .providers.sina_financial import FIELDS

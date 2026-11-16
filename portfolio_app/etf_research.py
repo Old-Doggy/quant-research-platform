@@ -23,16 +23,23 @@ class ETFStore:
             with db: yield db
         finally: db.close()
 
-    def ingest(self,batch):
+    def validate_batch(self,batch):
         meta=batch.metadata
         if meta.get('provider')!='sina' or meta.get('endpoint')!='etf_raw_daily':
             raise ValueError('不是ETF观察批次')
         if not batch.frame.empty and not batch.frame.symbol.eq(meta['symbol']).all():
             raise ValueError('ETF证券与批次不符')
-        artifact=self.updates.save_artifact(batch)
+    def index_existing(self,artifact):
+        batch=self.updates.read_artifact(artifact)
+        self.validate_batch(batch)
+        meta=batch.metadata
         with self.connect() as db:
             db.execute('INSERT OR IGNORE INTO etf_batches VALUES (?,?,?)',(artifact,meta['symbol'],meta['fetched_at']))
         return artifact
+
+    def ingest(self,batch):
+        self.validate_batch(batch)
+        return self.index_existing(self.updates.save_artifact(batch))
 
     def records(self):
         with self.connect() as db:
