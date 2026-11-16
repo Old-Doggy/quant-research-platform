@@ -108,6 +108,18 @@ class ResultStore:
             raise ValueError('研究配置或计算版本与保存结果不符')
         return self._decode(manifest, self.root / 'runs' / task_id)
 
+    def discard(self, task_id):
+        """Withdraw index after task completion fails; retain immutable evidence."""
+        _identifier(task_id)
+        with self._connect() as db:
+            db.execute('DELETE FROM results WHERE task_id=?', (task_id,))
+
+    def latest(self, key):
+        with self._connect() as db:
+            row = db.execute('SELECT task_id FROM results WHERE key_id=? ORDER BY created_at DESC LIMIT 1',
+                (key.key_id,)).fetchone()
+        return self.load(row[0], expected_key=key) if row else None
+
     def records(self, *, workspace=None, limit=50):
         with self._connect() as db:
             rows = db.execute('SELECT task_id,key_id,workspace,created_at FROM results '

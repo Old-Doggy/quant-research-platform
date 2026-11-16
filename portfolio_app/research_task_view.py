@@ -35,15 +35,18 @@ def session_runner(*, public_mode=False):
     if '_research_runner' not in st.session_state:
         import sqlite3
         journal = None
+        result_store = None
         if not public_mode:
             try:
                 from .state_paths import state_root
                 configure_diagnostics(state_root() / 'workbench_tasks' / 'diagnostics.jsonl')
                 journal = TaskJournal(state_root() / 'workbench_tasks' / 'tasks.sqlite')
+                from .result_store import ResultStore
+                result_store = ResultStore(state_root() / 'research_results')
             except (sqlite3.DatabaseError, OSError) as exc:
                 show_safe_error(exc, operation='journal')
                 st.session_state['_task_journal_unavailable'] = True
-        st.session_state['_research_runner'] = ResearchRunner(journal=journal)
+        st.session_state['_research_runner'] = ResearchRunner(journal=journal, result_store=result_store)
     if st.session_state.get('_task_journal_unavailable'):
         st.warning('任务记录不可用，未读取损坏内容；本次仅在内存运行，请下载结果并检查本地存储。')
     return st.session_state['_research_runner']

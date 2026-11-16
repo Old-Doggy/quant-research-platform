@@ -1,11 +1,8 @@
-"""One background task per session, cancellable commit and metadata-only journal.
-
-Results stay in memory or user-downloaded archives. The journal never unpickles
-objects or treats a partial file as a successful result after process restart.
-"""
+"""Cancellable background research with optional durable typed result storage."""
 from __future__ import annotations
 
 import copy
+import json
 import os
 from pathlib import Path
 import sqlite3
@@ -53,20 +50,27 @@ class TaskJournal:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with self._connect() as db:
             db.execute('CREATE TABLE IF NOT EXISTS tasks (id TEXT PRIMARY KEY, key_id TEXT, pid INTEGER, status TEXT, updated REAL)')
+            columns = {row[1] for row in db.execute('PRAGMA table_info(tasks)')}
+            for name in ('result_id', 'failure_json'):
+                if name not in columns:
+                    db.execute(f'ALTER TABLE tasks ADD COLUMN {name} TEXT')
 
     def _connect(self):
         return sqlite3.connect(self.path, timeout=10)
 
     def begin(self, task_id, key_id, *, pid=None):
         with self._connect() as db:
-            db.execute('INSERT INTO tasks VALUES (?,?,?,?,?)',
+            db.execute('INSERT INTO tasks (id,key_id,pid,status,updated) VALUES (?,?,?,?,?)',
                        (task_id, key_id, os.getpid() if pid is None else pid, 'running', time.time()))
 
-    def finish(self, task_id, status):
+    def finish(self, task_id, status, *, result_id=None, failure=None):
         if status not in {'succeeded', 'failed', 'cancelled', 'interrupted'}:
             raise ValueError('invalid terminal status')
         with self._connect() as db:
-            db.execute('UPDATE tasks SET status=?, updated=? WHERE id=?', (status, time.time(), task_id))
+            from .research_diagnostics import _safe_row
+            diagnostic = json.dumps(_safe_row(failure)) if failure else None
+            db.execute('UPDATE tasks SET status=?, updated=?, result_id=?, failure_json=? WHERE id=?',
+                (status, time.time(), result_id if status == 'succeeded' else None, diagnostic, task_id))
 
     def recover(self):
         with self._connect() as db:
@@ -77,14 +81,17 @@ class TaskJournal:
     def records(self, limit=50):
         self.recover()
         with self._connect() as db:
-            rows = db.execute('SELECT id,key_id,status,updated FROM tasks ORDER BY updated DESC LIMIT ?',
+            rows = db.execute('SELECT id,key_id,status,updated,result_id,failure_json FROM tasks ORDER BY updated DESC LIMIT ?',
                               (min(100, max(1, int(limit))),)).fetchall()
-        return [dict(task_id=a, key_id=b, status=c, updated=d, result_available=False) for a, b, c, d in rows]
+        return [dict(task_id=a, key_id=b, status=c, updated=d, result_id=e,
+            result_available=c == 'succeeded' and e is not None,
+            failure=json.loads(f) if f else None) for a, b, c, d, e, f in rows]
 
 
 class ResearchRunner:
-    def __init__(self, *, journal=None, cache=None):
+    def __init__(self, *, journal=None, cache=None, result_store=None):
         self.journal = journal
+        self.result_store = result_store
         self.cache = cache if cache is not None else ResearchResultCache()
         self._lock = RLock()
         self._token = CancellationToken()
@@ -133,11 +140,15 @@ class ResearchRunner:
                 retained = copy.deepcopy(value)
                 result = self.cache.submit(key, lambda: value)
                 try:
+                    if self.result_store:
+                        self.result_store.save(task_id, key, result.value)
                     if self.journal:
-                        self.journal.finish(task_id, 'succeeded')
+                        self.journal.finish(task_id, 'succeeded', result_id=task_id if self.result_store else None)
                 except Exception:
                     if not result.cache_hit:
                         self.cache.discard(key)
+                    if self.result_store:
+                        self.result_store.discard(task_id)
                     raise
                 self._value = result.value
                 self.last_success = retained
@@ -149,7 +160,7 @@ class ResearchRunner:
             with self._lock:
                 if self.journal:
                     try:
-                        self.journal.finish(task_id, status)
+                        self.journal.finish(task_id, status, failure=failure)
                     except Exception:
                         # A broken journal cannot strand the session in RUNNING.
                         pass
@@ -173,3 +184,7 @@ class ResearchRunner:
     def result(self):
         with self._lock:
             return copy.deepcopy(self._value) if self._task['status'] == 'succeeded' else None
+
+    def restore(self, key):
+        """Read only an exact saved identity; never compute or change active task."""
+        return self.result_store.latest(key) if self.result_store else None
