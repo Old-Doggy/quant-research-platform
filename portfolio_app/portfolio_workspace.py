@@ -101,7 +101,7 @@ def run_portfolio_workspace(frames, *, recipe: PortfolioRecipe, spec: ExecutionS
                             strategy_key: str, params=None, initial_cash=100000.0, token=None,
                             target_schedule=None, factor_source=None, rebalance_sessions=None,
                             corporate_actions=(), instrument_rules=None, session_calendar=None,
-                            participation_rate=1.):
+                            participation_rate=1.,external_flows=()):
     from .research_display import check_research_size
     check_research_size(pd.concat(list(frames.values()), ignore_index=True) if frames else pd.DataFrame())
     if token:
@@ -127,6 +127,10 @@ def run_portfolio_workspace(frames, *, recipe: PortfolioRecipe, spec: ExecutionS
     integrity = {symbol: (audit_strategy_input(frame, strategy_key) if target_schedule is None
                          else audit_research_input(frame)) for symbol, frame in session_frames.items()}
     prepared, sessions = _prepare(session_frames, has_actions=bool(actions))
+    from .cashflow_returns import normalize_flows
+    external_flows=normalize_flows(external_flows,sessions)
+    flows_by_day={day:0. for day in sessions}
+    for flow in external_flows: flows_by_day[flow['session']]+=flow['amount']
     rule_table = resolve_rule_table(frames, instrument_rules)
     if spec.asset_type == 'etf' and rule_table is None:
         raise InstrumentRuleError('ETF需要明确类别和有效期的证券规则，不能统一按T+0成交')
@@ -159,6 +163,8 @@ def run_portfolio_workspace(frames, *, recipe: PortfolioRecipe, spec: ExecutionS
             rules = {s: rule_table.resolve(s, date).asset_rule() for s in prepared}
         if token and index % 20 == 0:
             token.report(.1 + .7 * index / len(sessions), 'simulation')
+        cash+=flows_by_day[date]
+        if cash < -1e-9: raise PortfolioDataError('出金超过当日开盘前可用现金')
         cash += entitlement_book.open_session(date, positions, action_lots)
         if pending:
             plan = plan_portfolio_orders(pending, sessions=sessions[index - 1:index + 1],
@@ -218,14 +224,15 @@ def run_portfolio_workspace(frames, *, recipe: PortfolioRecipe, spec: ExecutionS
                 row = {**asdict(event), "decision_date": date}
                 orders.append(row)
     accounting = build_portfolio_accounting(dates=sessions, prices=prices, fills=fills,
-        initial_cash=initial_cash, corporate_actions=actions)
+        initial_cash=initial_cash, corporate_actions=actions,external_flows=external_flows)
     if token:
         token.checkpoint()
     ledger = accounting.ledger
-    total_return = float(ledger.iloc[-1].nav / initial_cash - 1)
+    total_return = float(ledger.iloc[-1].unit_nav - 1)
     config = dict(recipe=recipe.to_dict(), execution=asdict(spec), strategy_key=strategy_key,
         params=dict(params or {}), initial_cash=initial_cash,
         corporate_actions=[asdict(action) for action in actions])
+    config['external_flows']=external_flows
     config['market_sessions'] = market_metadata
     config['participation_rate'] = participation_rate
     if rule_table is not None:
@@ -249,7 +256,9 @@ def run_portfolio_workspace(frames, *, recipe: PortfolioRecipe, spec: ExecutionS
             'sessions': 'exact_common_sessions', 'initial_cash': initial_cash,
             'input_revision': inputs['data_sha256']})
     metrics = dict(total_return=total_return, total_cost=float(ledger.cost.sum()),
-        max_drawdown=float((pd.Series([initial_cash, *ledger.nav]) / pd.Series([initial_cash, *ledger.nav]).cummax() - 1).min()),
+        max_drawdown=float(ledger.drawdown.min()),
+        money_weighted_annual=accounting.diagnostics['performance']['money_weighted_annual'],
+        money_weighted_status=accounting.diagnostics['performance']['money_weighted_status'],
         fills=len(fills), rejected=sum(o["status"] == "REJECTED" for o in orders),
         sharpe=accounting.risk.get("sharpe"))
     return PortfolioWorkspaceResult(accounting, pd.DataFrame(snapshots,
@@ -281,8 +290,9 @@ def portfolio_drilldown(result, *, date, symbol=None):
 
 
 def portfolio_scenarios(frames, *, recipe, spec, strategy_key, params=None, initial_cash=100000, variants=(), token=None,
-                        corporate_actions=(), instrument_rules=None, session_calendar=None, participation_rate=1.):
+                        corporate_actions=(), instrument_rules=None, session_calendar=None, participation_rate=1.,external_flows=()):
     corporate_actions = tuple(corporate_actions)
+    external_flows = tuple(external_flows)
     rows = []
     names = ["baseline", *(v[0] for v in variants)]
     if len(names) != len(set(names)):
@@ -308,7 +318,7 @@ def portfolio_scenarios(frames, *, recipe, spec, strategy_key, params=None, init
             result = run_portfolio_workspace(frames, recipe=candidate_recipe, spec=candidate_spec,
                 strategy_key=strategy_key, params=params, initial_cash=initial_cash, token=token,
                 corporate_actions=corporate_actions, instrument_rules=instrument_rules,
-                session_calendar=session_calendar, participation_rate=participation_rate)
+                session_calendar=session_calendar, participation_rate=participation_rate,external_flows=external_flows)
             row.update(status="available", **result.metrics, config=result.config, data_sha256=result.inputs["data_sha256"])
         except (ValueError, KeyError) as exc:
             from .research_diagnostics import capture_error

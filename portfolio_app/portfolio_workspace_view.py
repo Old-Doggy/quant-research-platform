@@ -79,7 +79,7 @@ def render_portfolio_workspace(frame, *, context_id, public_mode):
     # Keep an independent snapshot so returning restores the same draft.
     control_keys = {"portfolio_symbols", "portfolio_strategy", "portfolio_cash", "portfolio_initial",
         "portfolio_cost", "portfolio_policy", "portfolio_slippage", "portfolio_threshold",
-        "portfolio_allocation", "portfolio_date", "portfolio_symbol"}
+        "portfolio_allocation", "portfolio_date", "portfolio_symbol","portfolio_capital_flows"}
     saved = st.session_state.get("portfolio_workspace_controls", {})
     for key, value in saved.items():
         if key not in st.session_state:
@@ -137,6 +137,9 @@ def _render_portfolio_workspace(frame, *, context_id, public_mode):
                 help='在历史成交价上加入额外的不利价差；首次运行可保留 0。')
             threshold = c.number_input("最小调仓比例", 0.0, .2, .01, .005, key="portfolio_threshold",
                 help='目标权重变化小于此比例时不调仓。0.01 = 1%。')
+            flow_text=st.text_area('外部出入金（可选）',value='',key='portfolio_capital_flows',
+                placeholder='2023-06-01,10000',height=95,
+                help='每行：交易日期,金额。正数入金，负数出金；在当日开盘前计入，金额单位为元。留空表示没有外部资金变化。')
             params = {}
             strategy = next(s for s in STRATEGIES if s.key == strategy_key)
             columns = [st.container() for _ in strategy.parameters]
@@ -178,6 +181,9 @@ def _render_portfolio_workspace(frame, *, context_id, public_mode):
     frames = {s: frame.loc[frame.symbol.eq(s)].copy() for s in symbols}
     try:
         frames, common_dates, excluded_rows = align_portfolio_observations(frames, metadata)
+        from .cashflow_returns import parse_flow_text,normalize_flows
+        external_flows=normalize_flows(parse_flow_text(flow_text),
+            [pd.Timestamp(day).date().isoformat() for day in common_dates])
     except ValueError as exc:
         st.info(str(exc))
         return
@@ -193,12 +199,12 @@ def _render_portfolio_workspace(frame, *, context_id, public_mode):
         show_safe_error(exc, operation='configuration')
         return
     draft = dict(context_id=context_id, input_revision=revision, recipe=recipe.to_dict(), policy=policy, cost=cost,
-        slippage=slippage, initial_cash=initial_cash, strategy_key=strategy_key, params=params)
+        slippage=slippage, initial_cash=initial_cash, strategy_key=strategy_key, params=params,external_flows=external_flows)
     state = sync_draft(st.session_state.get("portfolio_workspace_run"), draft)
     st.session_state["portfolio_workspace_run"] = state
     def compute(token):
         baseline = run_portfolio_workspace(frames, recipe=recipe, spec=spec,
-            strategy_key=strategy_key, params=params, initial_cash=initial_cash, token=token)
+            strategy_key=strategy_key, params=params, initial_cash=initial_cash, token=token,external_flows=external_flows)
         alternate = {s: (1 - cash_weight) * (.6 if i == 0 else .4 / (len(symbols) - 1))
                      for i, s in enumerate(symbols)} if len(symbols) > 1 else weights
         variants = [("费用 +10 基点", "cost", cost + 10),
@@ -206,14 +212,14 @@ def _render_portfolio_workspace(frame, *, context_id, public_mode):
         if len(symbols) > 1 and cash_weight < 1:
             variants.append(("首标的权重 60%", "weights", alternate))
         report = portfolio_scenarios(frames, recipe=recipe, spec=spec, strategy_key=strategy_key,
-            params=params, initial_cash=initial_cash, variants=variants, token=token)
+            params=params, initial_cash=initial_cash, variants=variants, token=token,external_flows=external_flows)
         result = dict(baseline=baseline, scenarios=report)
         if not public_mode:
             from .result_replay import portfolio_replay_inputs
             from .research_dataset import dataset_metadata
             result['data_mode'] = dataset_metadata(next(iter(frames.values())))['source_kind']
             result['replay'] = portfolio_replay_inputs(frames, recipe=recipe, spec=spec,
-                strategy_key=strategy_key, params=params, initial_cash=initial_cash)
+                strategy_key=strategy_key, params=params, initial_cash=initial_cash,external_flows=external_flows)
         return result
     with result_area:
         state = background_run(state, compute, workspace='portfolio', start=start, public_mode=public_mode)
@@ -234,6 +240,9 @@ def _render_portfolio_workspace(frame, *, context_id, public_mode):
         result = state.result["baseline"]
         run_id = state.run_id
         metrics = result.metrics
+        if result.config.get('external_flows'):
+            annual=metrics.get('money_weighted_annual')
+            st.caption('收益按时间加权计算；资金加权年收益 '+(f'{annual:.2%}' if annual is not None else '—（无法确定唯一值）')+' · ACT/365')
         summary = build_portfolio_research_summary(result)
         a, b, c, d = st.columns(4)
         a.metric("组合区间收益", f"{summary['return']:.2%}" if summary['return'] is not None else "—")
@@ -264,8 +273,9 @@ def _render_portfolio_workspace(frame, *, context_id, public_mode):
         ])
         with nav_tab:
             curve = view["curve"].copy()
-            curve["unit_nav"] = curve.nav / result.config['initial_cash']
-            curve["drawdown"] = curve.nav / curve.nav.cummax().clip(lower=result.config['initial_cash']) - 1
+            if 'unit_nav' not in curve:
+                curve["unit_nav"] = curve.nav / result.config['initial_cash']
+            curve["drawdown"] = curve.unit_nav / curve.unit_nav.cummax().clip(lower=1.) - 1
             curve = envelope_sample(curve, value='nav')
             def select_chart_date():
                 from .chart_events import accept_chart_event, plotly_date_event

@@ -19,7 +19,7 @@ def result_projection(value):
     if baseline is not None and hasattr(baseline, 'accounting'):
         ledger = baseline.accounting.ledger.copy(deep=True)
         initial = float(baseline.config['initial_cash'])
-        curve = pd.DataFrame({'trade_date': ledger.trade_date, 'nav': ledger.nav / initial})
+        curve = pd.DataFrame({'trade_date': ledger.trade_date, 'nav': ledger.unit_nav if 'unit_nav' in ledger else ledger.nav / initial})
         # Include initial equity in peak so day-one costs remain a drawdown.
         curve['drawdown'] = curve.nav / curve.nav.cummax().clip(lower=1.) - 1.
         if 'drawdown' in ledger: curve['drawdown'] = ledger.drawdown

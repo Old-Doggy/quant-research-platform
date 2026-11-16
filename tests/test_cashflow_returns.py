@@ -66,3 +66,60 @@ def test_deposit_funds_execution_without_becoming_pnl_or_attribution():
     report=contribution_period(result.ledger,initial_cash=100.,start=dates[0],end=dates[1])
     assert report['total_return']==pytest.approx(99/1100)
     assert report['components'].contribution.sum()==pytest.approx(99/1100)
+
+
+def test_portfolio_simulation_and_saved_replay_use_same_capital_schedule(tmp_path):
+    from test_result_replay import fixture,save
+    from portfolio_app.portfolio_workspace import run_portfolio_workspace
+    from portfolio_app.portfolio_recipe import PortfolioRecipe
+    from portfolio_app.offline_execution import ExecutionSpec
+    from portfolio_app.result_replay import portfolio_replay_inputs,replay_saved
+    from portfolio_app.result_store import ResultStore
+    frame,params,_=fixture()
+    flows=[dict(flow_id='deposit',session=frame.trade_date.iloc[40].date().isoformat(),amount=5000.,timing='session_open')]
+    config=dict(recipe=PortfolioRecipe.from_dict(dict(recipe_id='cashflows',target_weights={'FIXTURE':.8},
+        cash_weight=.2,lot_size=1)),spec=ExecutionSpec('next-close','close','next_close',10,0,'us_stock'),
+        strategy_key='trend',params=params,initial_cash=10000.,external_flows=flows)
+    result=run_portfolio_workspace({'FIXTURE':frame},**config)
+    assert result.accounting.ledger.external_flow.sum()==5000.
+    assert result.metrics['total_return']==pytest.approx(result.accounting.ledger.unit_nav.iloc[-1]-1)
+    replay=portfolio_replay_inputs({'FIXTURE':frame},**config)
+    store=ResultStore(tmp_path)
+    save(store,dict(baseline=result,replay=replay))
+    assert replay_saved(store,'replay')['status']=='matched'
+
+
+def test_cashflow_input_does_not_guess_dates_or_amounts():
+    from portfolio_app.cashflow_returns import parse_flow_text
+    assert parse_flow_text('')==[]
+    rows=parse_flow_text('2025-01-02,500\n2025-01-03,-20')
+    assert [r['amount'] for r in rows]==[500.,-20.]
+    for text in ['2025-1-2,500','2025-01-02,NaN','2025-01-02,0','2025-01-02,5,6']:
+        with pytest.raises(ValueError): parse_flow_text(text)
+
+
+def test_opening_deposit_earns_declared_same_session_cash_return():
+    from portfolio_app.portfolio_accounting import build_portfolio_accounting
+    ledger=build_portfolio_accounting(dates=['2025-01-02','2025-01-03'],prices={},fills=[],
+        initial_cash=1000.,cash_returns={'2025-01-03':.01},external_flows=[
+            dict(flow_id='deposit',session='2025-01-03',amount=1000.,timing='session_open')]).ledger
+    assert ledger.nav.tolist()==[1000.,2020.]
+    assert ledger.daily_return.iloc[-1]==pytest.approx(.01)
+
+
+def test_contribution_rows_are_stable_across_process_hash_seeds():
+    import os
+    import subprocess
+    import sys
+    script = """
+from portfolio_app.portfolio_accounting import build_portfolio_accounting
+symbols=['SYNTH_ALPHA','SYNTH_BETA','SYNTH_DEFENSIVE']
+dates=['2025-01-02','2025-01-03']
+prices={s:dict(zip(dates,[10.,11.])) for s in symbols}
+fills=[dict(fill_id=s,fill_date=dates[0],symbol=s,side='BUY',quantity=1,price=10.,fee=0.) for s in symbols]
+result=build_portfolio_accounting(dates=dates,prices=prices,fills=fills,initial_cash=1000.)
+print(result.symbol_contribution.to_json(orient='records'))
+"""
+    outputs = [subprocess.run([sys.executable, '-c', script], env={**os.environ, 'PYTHONHASHSEED': seed},
+        capture_output=True, text=True, check=True, timeout=20).stdout for seed in ('1', '2')]
+    assert outputs[0] == outputs[1]

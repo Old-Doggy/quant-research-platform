@@ -136,7 +136,7 @@ def build_portfolio_accounting(
         cash_pnl = 0.0
         if index > 0:
             cash_rate = _finite(cash_returns.get(date, 0.0), f"cash return on {date}")
-            cash_pnl = previous_cash * cash_rate
+            cash_pnl = (previous_cash+external_flow) * cash_rate
             cash += cash_pnl
         cash += entitlements.open_session(date, positions, lots)
         fees = 0.0
@@ -194,7 +194,7 @@ def build_portfolio_accounting(
         for symbol, income in entitlements.income_by_symbol.items():
             symbol_pnl[symbol] = symbol_pnl.get(symbol, 0.) + income
         symbols_with_lots = {lot["symbol"] for lots_for_leg in lots.values() for lot in lots_for_leg}
-        for symbol in symbols_with_lots:
+        for symbol in sorted(symbols_with_lots):
             symbol_pnl[symbol] = symbol_pnl.get(symbol, 0.0) + sum(
                 int(lot["quantity"]) * (_price(prices, lot["symbol"], date) - float(lot["price"]))
                 for lots_for_symbol in lots.values() for lot in lots_for_symbol if lot["symbol"] == symbol

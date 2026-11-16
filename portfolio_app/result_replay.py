@@ -36,12 +36,12 @@ def single_stock_replay_inputs(frame, *, strategy_key, params, transaction_cost,
             end_date=pd.Timestamp(end_date).isoformat() if end_date is not None else None))
 
 
-def portfolio_replay_inputs(frames, *, recipe, spec, strategy_key, params, initial_cash):
+def portfolio_replay_inputs(frames, *, recipe, spec, strategy_key, params, initial_cash,external_flows=()):
     sources = {s: _source_frame(f, strategy_input_fields(strategy_key)) for s, f in frames.items()}
     return dict(schema='research-replay.v1', kind='cash_portfolio', revision=computation_revision(),
         frames=sources, input_identity={s: _input_identity(f) for s, f in sources.items()},
         config=dict(recipe=recipe.to_dict(), spec=asdict(spec), strategy_key=strategy_key,
-            params=copy.deepcopy(params), initial_cash=float(initial_cash)))
+            params=copy.deepcopy(params), initial_cash=float(initial_cash),external_flows=copy.deepcopy(list(external_flows))))
 
 
 def factor_replay_inputs(frame, *, config):

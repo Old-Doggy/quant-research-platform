@@ -4,6 +4,8 @@
 
 Python · Streamlit · Plotly · Lightweight Charts
 
+下一版开发进度：[M0–M5 状态报告](docs/status-v2.md) · [验收记录](docs/acceptance-v2.md)
+
 ![行情与研究](docs/images/watch.png)
 
 ## 能做什么

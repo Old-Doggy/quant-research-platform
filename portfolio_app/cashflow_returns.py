@@ -3,6 +3,24 @@ import math
 from datetime import date
 
 
+def parse_flow_text(text):
+    """One ISO date and signed CNY amount per line, with stable local IDs."""
+    result=[]
+    if not isinstance(text,str) or len(text)>10000:
+        raise ValueError('出入金文本无效或过长')
+    for index,line in enumerate(text.splitlines()):
+        if not line.strip(): continue
+        parts=line.replace('，',',').split(',')
+        if len(parts)!=2: raise ValueError('每行填写日期,金额')
+        day,number=(p.strip() for p in parts)
+        if date.fromisoformat(day).isoformat()!=day: raise ValueError('出入金日期需要YYYY-MM-DD')
+        amount=float(number)
+        if not math.isfinite(amount) or amount==0: raise ValueError('出入金金额必须非零且有限')
+        result.append(dict(flow_id=f'capital-line-{index+1}',session=day,amount=amount,timing='session_open'))
+    if len(result)>100: raise ValueError('出入金最多100条')
+    return result
+
+
 def normalize_flows(flows,dates):
     seen=set();result=[]
     for flow in flows:
