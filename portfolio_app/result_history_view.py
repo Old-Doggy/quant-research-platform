@@ -21,6 +21,21 @@ def render_result_history(*, public_mode):
     except Exception as exc:
         show_safe_error(exc, operation='archive')
         return
+    with st.expander('导入研究归档'):
+        uploaded=st.file_uploader('选择本地研究ZIP',type=['zip'],key='saved_result_upload',max_upload_size=64)
+        if st.button('导入并校验',key='saved_result_import',disabled=uploaded is None):
+            try:
+                from .result_archive_v2 import import_result
+                selected=import_result(store,uploaded.getvalue())
+            except Exception as exc:
+                show_safe_error(exc,operation='archive')
+            else:
+                st.session_state['saved_result_selected']=selected
+                st.session_state['result_history_search']=''
+                st.session_state['result_history_workspace']='全部'
+                st.session_state['result_history_mode']='单次结果'
+                st.rerun()
+        st.caption('完整归档包含研究输入和持仓，仅用于本地迁移。来源授权随原数据保留。')
     mode=st.segmented_control('实验视图',['单次结果','多次比较','收益与回撤','任务状态'],default='单次结果',key='result_history_mode')
     if mode=='任务状态':
         from .experiment_catalog_view import render_task_status
@@ -110,6 +125,18 @@ def render_result_history(*, public_mode):
             st.download_button('下载运行清单', json.dumps(projection['manifest'], ensure_ascii=False, indent=2),
                 file_name='saved-run-manifest.json', mime='application/json', key='saved_result_manifest')
         st.caption('这里读取保存内容；重新计算需要原始输入和相同的数据、算法版本。')
+        if st.button('准备完整归档',key='saved_result_prepare_zip'):
+            try:
+                from .result_archive_v2 import export_result
+                data=export_result(store,selected)
+                st.session_state['_saved_result_zip']=(selected,data)
+            except Exception as exc:
+                show_safe_error(exc,operation='archive')
+        prepared=st.session_state.get('_saved_result_zip')
+        if prepared and prepared[0]==selected:
+            st.download_button('下载本地研究ZIP',prepared[1],file_name=selected+'.zip',mime='application/zip',key='saved_result_zip')
+        elif prepared:
+            st.session_state.pop('_saved_result_zip',None)
         if value.get('replay'):
             if st.button('重新计算并核对', key='saved_result_replay'):
                 try:
