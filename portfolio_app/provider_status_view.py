@@ -30,6 +30,7 @@ def render_provider_status():
         free_labels = {'sina':'新浪','eastmoney':'东方财富','baostock':'BaoStock'}
         free_statuses = {'sample_verified':'小样本已检查','rate_limited':'最近检查限流','dependency_missing':'未安装可选采集组件'}
         for row in capabilities:
-            if row['provider'] in free_labels:
+            if row['provider'] in free_labels and row['capability']=='a_daily_raw':
                 status = row['access_status'] if row['access_status']=='dependency_missing' else row['last_check_status']
                 st.caption(f"{free_labels[row['provider']]} · {free_statuses[status]}（2026-11-15）· 自动备用待验证")
+        st.caption('新浪免费三表 · 两只证券的九期报告已核对（2026-11-16），在“财务”页获取。历史修订档案未覆盖。')

@@ -23,6 +23,11 @@ def provider_capabilities():
         access_status='not_probed' if configured else 'credentials_missing',implementation='adapter_ready',
         live_verified=False,source_url=f'https://tushare.pro/document/2?doc_id={doc}')
         for endpoint,doc in [('income',33),('balancesheet',36),('cashflow',44),('fina_indicator',79)])
+    rows.extend(dict(provider='sina',upstream='Sina Finance',capability=endpoint,
+        credential_status='not_required',access_status='not_probed',implementation='adapter_ready',
+        live_verified=False,last_check_status='sample_verified',sample_verified_on='2026-11-16',
+        automatic_fallback=False,source_url='https://quotes.sina.cn/cn/api/openapi.php/CompanyFinanceService.getFinanceReport2022')
+        for endpoint in ('income','balancesheet','cashflow'))
     rows.append(dict(provider='tencent', upstream='Tencent Finance', capability='a_daily_raw',
         credential_status='not_required', access_status='not_probed', implementation='adapter_ready',
         last_check_status='sample_verified',
