@@ -24,6 +24,11 @@ def render_result_history(*, public_mode):
     if not records:
         st.info('还没有保存结果。在策略、组合或因子页运行研究后，会自动出现在这里。')
         return
+    mode=st.segmented_control('实验视图',['单次结果','多次比较'],default='单次结果',key='result_history_mode')
+    if mode=='多次比较':
+        from .result_comparison_view import render_result_comparison
+        render_result_comparison(store,records)
+        return
     st.caption('保存结果 · 选择一次运行，查看当次曲线、指标与明细。')
     by_id = {r['task_id']: r for r in records}
     from datetime import datetime
