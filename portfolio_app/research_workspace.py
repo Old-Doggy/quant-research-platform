@@ -421,7 +421,7 @@ def _render_explicit_research_workspace(route_state) -> None:
                 sensitivity=sensitivity_records,
             )
             result_payload["archive"] = archive
-        return {
+        computed = {
             "data_mode": "seeded_demo" if metadata['source_kind'] == 'synthetic' else metadata['source_kind'],
             "workspace": route_state.active_workspace,
             "strategy_key": strategy_key,
@@ -431,6 +431,13 @@ def _render_explicit_research_workspace(route_state) -> None:
             'integrity': research.diagnostics['integrity'],
             'result_payload': result_payload,
         }
+        if not PUBLIC_MODE and not is_portfolio:
+            from .result_replay import single_stock_replay_inputs
+            computed['single_stock_research'] = research
+            computed['replay'] = single_stock_replay_inputs(selected, strategy_key=strategy_key,
+                params=strategy_params, transaction_cost=transaction_cost)
+            computed['research_parameters'] = computed['replay']['config']
+        return computed
 
     from portfolio_app.research_task_view import background_run, previous_run_view
     state = background_run(state, compute, workspace="strategy", start=start, public_mode=PUBLIC_MODE)

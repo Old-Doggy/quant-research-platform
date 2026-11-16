@@ -42,6 +42,11 @@ def render_result_history(*, public_mode):
         st.caption('这条记录未通过读取检查，可选择其他记录。')
         return
     metrics = projection['metrics']
+    origin = value.get('data_mode')
+    if origin in ('seeded_demo', 'synthetic'):
+        st.caption('合成示例 · 非真实证券数据')
+    elif origin:
+        st.caption({'local_market': '本地行情', 'file_import': '文件导入'}.get(origin, '本地研究数据'))
     labels = {'total_return': ('区间收益', True), 'max_drawdown': ('最大回撤', True),
         'sharpe': ('夏普比率', False), 'fills': ('成交笔数', False), 'trades': ('交易次数', False),
         '有效IC交易日': ('有效IC交易日', False)}
@@ -83,3 +88,12 @@ def render_result_history(*, public_mode):
             st.download_button('下载运行清单', json.dumps(projection['manifest'], ensure_ascii=False, indent=2),
                 file_name='saved-run-manifest.json', mime='application/json', key='saved_result_manifest')
         st.caption('这里读取保存内容；重新计算需要原始输入和相同的数据、算法版本。')
+        if value.get('replay'):
+            if st.button('重新计算并核对', key='saved_result_replay'):
+                try:
+                    from .result_replay import replay_saved
+                    with st.spinner('核对保存输入与计算结果…'):
+                        report = replay_saved(store, selected)
+                    st.success(f"{report['rows']:,} 个交易日逐点一致，指标与 {report['trade_events']:,} 条交易记录一致。")
+                except Exception as exc:
+                    show_safe_error(exc, operation='replay')

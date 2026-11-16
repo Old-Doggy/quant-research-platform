@@ -59,7 +59,8 @@ def _runtime():
 def computation_revision():
     root = Path(__file__).parent
     sources = {name: hashlib.sha256((root / name).read_bytes()).hexdigest()
-               for name in (*_ENGINE_FILES, 'research_runtime.py', 'research_result_cache.py')
+               for name in (*_ENGINE_FILES, 'research_runtime.py', 'research_result_cache.py',
+                   'result_replay.py', 'result_codec.py', 'result_store.py')
                if (root / name).is_file()}
     return semantic_hash(dict(sources=sources, runtime=_runtime()))
 

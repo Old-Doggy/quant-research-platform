@@ -31,7 +31,7 @@ def result_projection(value):
         if 'benchmark_equity' in frame: curve['benchmark_nav'] = frame.benchmark_equity
         projection.update(curve=curve, metrics=getattr(research, 'metrics',
             research.diagnostics.get('metrics', {})), manifest=research.diagnostics.get('run_manifest'),
-            parameters=getattr(research, 'strategy_config', {}))
+            parameters=value.get('research_parameters') or getattr(research, 'strategy_config', {}))
         projection['tables'] = {'研究序列': frame.copy(), '交易事件': pd.DataFrame(research.trade_events)}
         return projection
     payload = value.get('result_payload') or {}
