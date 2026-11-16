@@ -48,6 +48,7 @@ def test_overview_graph_table_switch_uses_verified_query_and_stops_on_corruption
         batch = updates.read_artifact(artifact)
         batch.frame['symbol'] = batch.frame.ts_code
         batch.frame['pre_close'] = 9.
+        batch.frame['source_pre_close'] = 9.
         changed.append(updates.save_artifact(ProviderBatch(batch.frame,batch.raw,batch.metadata,batch.completeness)))
     manifest = publish_free(store,changed,master,calendar)
     monkeypatch.setenv('OVERVIEW_TEST_ROOT', str(store.root))

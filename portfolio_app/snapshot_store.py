@@ -13,6 +13,7 @@ from .data import build_data_quality_report
 from .data_reconcile import compare_daily_sources, check_daily_coverage
 from .snapshot_contracts import identity_hash, snapshot_from_hash, SnapshotReference
 from .update_store import UpdateStore, UpdateBusy
+from .provider_normalize import source_previous_close, PREVIOUS_CLOSE_POLICY
 
 
 class SnapshotStore:
@@ -171,6 +172,8 @@ class SnapshotStore:
         frame.attrs['research_dataset']=dict(dataset_id=manifest['dataset_id'],version=snapshot_id,
             price_basis='raw',source_kind='provider_snapshot')
         frame.attrs['research_capabilities']=manifest['research_capabilities']
+        frame['pre_close']=source_previous_close(frame,'source_pre_close')
+        frame.attrs['previous_close_policy']=PREVIOUS_CLOSE_POLICY
         return frame
 
     def rollback(self,dataset_id,snapshot_id):

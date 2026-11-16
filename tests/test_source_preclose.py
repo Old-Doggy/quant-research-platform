@@ -49,3 +49,46 @@ def test_tencent_does_not_promote_previous_observation_to_source_quote():
     batch = TencentProvider(transport=lambda *a:payload,min_interval=0).daily('600000.SH',sessions=['2025-01-02','2025-01-06'])
     assert batch.frame.pre_close.isna().all()
     assert batch.frame.source_pre_close.isna().all()
+
+
+def test_legacy_query_and_full_read_never_promote_inferred_previous_close(tmp_path):
+    from test_snapshot_store import setup_store,publish
+    from portfolio_app.providers.base import ProviderBatch
+    from portfolio_app.market_query import query_daily
+    store,updates,ids,master,calendar = setup_store(tmp_path)
+    for explicit in (False,True):
+        changed = []
+        for artifact in ids:
+            batch = updates.read_artifact(artifact)
+            batch.frame['pre_close'] = 9.
+            if explicit:
+                batch.frame['source_pre_close'] = 8.
+            changed.append(updates.save_artifact(ProviderBatch(batch.frame,batch.raw,batch.metadata,batch.completeness)))
+        manifest = publish(store,changed,master,calendar)
+        result = query_daily(store,manifest['snapshot_id'],symbols=['600000.SH'],start='2025-01-02',
+            end='2025-01-02',columns=['close','pre_close'])
+        assert result.columns.tolist() == ['close','pre_close']
+        full = store.read_frame(manifest['snapshot_id'])
+        for frame in (result,full):
+            if explicit:
+                assert frame.pre_close.iloc[0] == 8.
+            else:
+                assert frame.pre_close.isna().all()
+            assert frame.attrs['previous_close_policy'] == 'explicit_source_only.v1'
+        # Immutable source files and earlier inferred values remain untouched.
+        assert updates.read_artifact(changed[0]).frame.pre_close.iloc[0] == 9.
+        only = query_daily(store,manifest['snapshot_id'],symbols=['600000.SH'],start='2025-01-02',
+            end='2025-01-02',columns=['pre_close'])
+        assert len(only)==1 and only.columns.tolist()==['pre_close']
+        with pytest.raises(ValueError,match='预算'):
+            query_daily(store,manifest['snapshot_id'],symbols=['600000.SH'],start='2025-01-02',
+                end='2025-01-02',columns=['pre_close'],max_bytes=1)
+
+
+def test_canonical_reread_does_not_refill_explicitly_missing_source_previous_close():
+    from portfolio_app.data import normalise_market_frame
+    from portfolio_app.provider_normalize import normalize_daily
+    raw = pd.DataFrame(dict(ts_code=['600000.SH']*2,trade_date=['20250102','20250106'],
+        open=[10.]*2,high=[11.]*2,low=[9.]*2,close=[10.]*2,vol=[100.]*2,amount=[100.]*2))
+    frame = normalize_daily(raw,profile='tushare_a_daily',batch_id='missing')
+    assert normalise_market_frame(frame).pre_close.isna().all()

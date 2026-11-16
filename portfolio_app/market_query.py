@@ -5,6 +5,7 @@ import pandas as pd
 import pyarrow.dataset as ds
 
 from .instrument_master import _date
+from .provider_normalize import source_previous_close, PREVIOUS_CLOSE_POLICY
 
 
 def query_daily(store, snapshot_id, *, symbols, start, end, columns,
@@ -32,17 +33,26 @@ def query_daily(store, snapshot_id, *, symbols, start, end, columns,
     for artifact in manifest['batch_ids']:
         path=store.root/'batches'/artifact/'normalized.parquet'
         data=ds.dataset(path,format='parquet')
-        if not set(columns)<=set(data.schema.names):
+        scan_columns=[c for c in columns if c!='pre_close']
+        if 'pre_close' in columns and 'source_pre_close' in data.schema.names and 'source_pre_close' not in scan_columns:
+            scan_columns.append('source_pre_close')
+        # Scan one key even for a legacy pre_close-only projection, preserving row counts.
+        if not scan_columns:
+            scan_columns=['ts_code']
+        if not set(scan_columns)<=set(data.schema.names):
             raise ValueError('查询字段不在快照标准数据中')
         predicate=(ds.field('ts_code').isin(symbols)
             & (ds.field('trade_date')>=pd.Timestamp(start).to_datetime64())
             & (ds.field('trade_date')<=pd.Timestamp(end).to_datetime64()))
-        for batch in data.scanner(columns=columns,filter=predicate,batch_size=8192).to_batches():
+        for batch in data.scanner(columns=scan_columns,filter=predicate,batch_size=8192).to_batches():
             rows+=batch.num_rows
             bytes_used+=batch.nbytes
             if rows>max_rows or bytes_used>max_bytes:
                 raise ValueError('查询结果超出预算，请缩小证券、日期或字段范围')
             part=batch.to_pandas()
+            if 'pre_close' in columns:
+                part['pre_close']=source_previous_close(part,'source_pre_close')
+            part=part[columns]
             part.attrs={}
             parts.append(part)
     result=pd.concat(parts,ignore_index=True) if parts else pd.DataFrame(columns=columns)
@@ -58,6 +68,7 @@ def query_daily(store, snapshot_id, *, symbols, start, end, columns,
     result.attrs['research_dataset']=dict(dataset_id=manifest['dataset_id'],version=snapshot_id,
         price_basis='raw',source_kind='provider_snapshot')
     result.attrs['research_capabilities']=manifest['research_capabilities']
+    result.attrs['previous_close_policy']=PREVIOUS_CLOSE_POLICY
     result.attrs['query']=dict(rows=len(result),arrow_bytes=bytes_used,pandas_bytes=pandas_bytes,
         elapsed_seconds=time.perf_counter()-started,backend='pyarrow.dataset',snapshot_id=snapshot_id)
     return result

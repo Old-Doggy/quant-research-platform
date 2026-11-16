@@ -25,6 +25,7 @@ def test_live_browsing_tracks_generation_while_pinned_link_and_research_result_s
         batch.frame['symbol']=batch.frame.ts_code
         batch.frame['vol']=batch.frame.volume
         batch.frame['pre_close']=10.
+        batch.frame['source_pre_close']=10.
         changed.append(updates.save_artifact(ProviderBatch(batch.frame,batch.raw,batch.metadata,batch.completeness)))
     first=publish_free(store,changed,master,calendar)
     view=app().run()

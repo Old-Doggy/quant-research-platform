@@ -100,7 +100,10 @@ def normalise_market_frame(frame: pd.DataFrame, source_name: str = "local data")
         "removed_invalid_date_rows": removed_invalid_dates + int(prior.get("removed_invalid_date_rows", 0)),
     }
     previous_close = result.groupby("ts_code", dropna=False)["close"].shift(1)
-    result["pre_close"] = result["pre_close"].fillna(previous_close)
+    if frame.attrs.get('previous_close_policy') == 'explicit_source_only.v1':
+        result['pre_close'] = pd.to_numeric(result['source_pre_close'], errors='raise') if 'source_pre_close' in result else np.nan
+    else:
+        result["pre_close"] = result["pre_close"].fillna(previous_close)
     result["return"] = result.groupby("ts_code", dropna=False)["close"].pct_change(fill_method=None)
     result.attrs['return_contract'] = dict(definition='price_return_v1', version='1.0',
         price_basis=frame.attrs.get('research_dataset', {}).get('price_basis', 'unspecified'),
