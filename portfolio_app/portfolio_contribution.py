@@ -21,7 +21,9 @@ def contribution_period(ledger,*,initial_cash,start,end):
     if pd.Timestamp(start)>pd.Timestamp(end): raise ValueError('贡献期间倒置')
     values=data[[c[0] for c in COMPONENTS.values()]].copy()
     values['cost']=-values.cost
+    external=data.external_flow if 'external_flow' in data else pd.Series(0.,index=data.index)
     expected=data.nav.diff();expected.iloc[0]=data.nav.iloc[0]-initial_cash
+    expected=expected-external
     if not np.isfinite(values.to_numpy(dtype=float)).all() or not np.isfinite(data.nav).all() or data.nav.le(0).any():
         raise ValueError('贡献账本数值无效')
     if not np.allclose(values.sum(axis=1),expected,rtol=1e-10,atol=1e-8):
@@ -30,9 +32,22 @@ def contribution_period(ledger,*,initial_cash,start,end):
     if not mask.any(): raise ValueError('期间没有账本记录')
     first=int(np.flatnonzero(mask.to_numpy())[0])
     base=float(data.nav.iloc[first-1]) if first else float(initial_cash)
-    total=float(data.loc[mask,'nav'].iloc[-1]/base-1)
+    if external.ne(0).any():
+        bases=data.nav.shift(1).fillna(initial_cash)+external
+        rates=expected/bases
+        if bases.le(0).any(): raise ValueError('期间出入金后权益非正')
+        chosen=1+rates.loc[mask]
+        total=float(chosen.prod()-1)
+        # Forward-link each daily component by all later daily return factors.
+        suffix=chosen.iloc[::-1].cumprod().iloc[::-1]/chosen
+        linked=values.loc[mask].div(bases.loc[mask],axis=0).mul(suffix,axis=0).sum()
+        method='forward_linked_daily_twr_components.v1'
+    else:
+        total=float(data.loc[mask,'nav'].iloc[-1]/base-1)
+        linked=values.loc[mask].sum()/base
+        method='opening_equity_scaled_daily_pnl.v1'
     rows=[dict(kind=kind,label=label,pnl=float(values.loc[mask,field].sum()),
-        contribution=float(values.loc[mask,field].sum()/base)) for kind,(field,label) in COMPONENTS.items()]
+        contribution=float(linked[field])) for kind,(field,label) in COMPONENTS.items()]
     return dict(components=pd.DataFrame(rows),total_return=total,base_equity=base,
-        method='opening_equity_scaled_daily_pnl.v1',start=str(start),end=str(end),
+        method=method,start=str(start),end=str(end),
         residual=float(sum(row['contribution'] for row in rows)-total))

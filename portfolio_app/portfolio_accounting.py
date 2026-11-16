@@ -81,10 +81,14 @@ def build_portfolio_accounting(
     industry_by_symbol: Mapping[str, str] | None = None,
     industry_pit_available: bool = False, annualization_sessions: int = 252,
     risk_window: int | None = None,
-    corporate_actions=(),
+    corporate_actions=(),external_flows=(),
 ) -> PortfolioAccountingResult:
     """Build a single cash-accounted offline portfolio result."""
     dates = _date_table(dates)
+    from .cashflow_returns import normalize_flows,account_returns
+    external_flows=normalize_flows(external_flows,dates)
+    flows_by_day={day:0. for day in dates}
+    for flow in external_flows: flows_by_day[flow['session']]+=flow['amount']
     starting_cash = _finite(initial_cash, "initial_cash", non_negative=True)
     if not isinstance(annualization_sessions, int) or annualization_sessions <= 0:
         raise PortfolioAccountingError("annualization_sessions must be positive")
@@ -124,6 +128,11 @@ def build_portfolio_accounting(
     factor_rows: list[dict[str, Any]] = []
 
     for index, date in enumerate(dates):
+        external_flow=flows_by_day[date]
+        cash+=external_flow
+        return_base=previous_nav+external_flow
+        if cash < -1e-9 or return_base<=0:
+            raise PortfolioAccountingError('出金超过可用现金或期初权益非正')
         cash_pnl = 0.0
         if index > 0:
             cash_rate = _finite(cash_returns.get(date, 0.0), f"cash return on {date}")
@@ -179,8 +188,8 @@ def build_portfolio_accounting(
         nav = cash + sum(values.values()) + entitlements.receivable
         if not math.isfinite(nav) or nav <= 0:
             raise PortfolioAccountingError(f"NAV must be positive on {date}")
-        daily_pnl = nav - previous_nav if index > 0 else nav - starting_cash
-        daily_return = daily_pnl / previous_nav if previous_nav > 0 else None
+        daily_pnl = nav - previous_nav - external_flow
+        daily_return = daily_pnl / return_base
         symbol_pnl: dict[str, float] = dict(realized_by_symbol)
         for symbol, income in entitlements.income_by_symbol.items():
             symbol_pnl[symbol] = symbol_pnl.get(symbol, 0.) + income
@@ -201,17 +210,17 @@ def build_portfolio_accounting(
             if abs(delta) > 1e-15 or abs(dividend)>1e-15:
                 symbol_rows.append({"trade_date": date, "symbol": symbol, "pnl": float(pnl),
                     'daily_pnl':delta,'price_pnl':delta-dividend,'dividend_pnl':dividend,
-                    "contribution": delta / previous_nav if previous_nav else 0.0, "kind": "symbol"})
+                    "contribution": delta / return_base, "kind": "symbol"})
         for leg, pnl in leg_pnl.items():
             delta = pnl - previous_leg_pnl.get(leg, 0.0)
             if abs(delta) > 1e-15:
-                leg_rows.append({"trade_date": date, "leg": leg, "pnl": float(pnl), "contribution": delta / previous_nav if previous_nav else 0.0})
+                leg_rows.append({"trade_date": date, "leg": leg, "pnl": float(pnl), "contribution": delta / return_base})
         factor_values = factor_pnl.get(date, {})
         factor_total = 0.0
         for factor, value in factor_values.items():
             number = _finite(value, f"factor P&L for {factor}")
             factor_total += number
-            factor_rows.append({"trade_date": date, "factor": str(factor), "pnl": number, "contribution": number / previous_nav if previous_nav else 0.0})
+            factor_rows.append({"trade_date": date, "factor": str(factor), "pnl": number, "contribution": number / return_base})
         residual = daily_pnl - factor_total
         symbol_delta=sum(pnl-previous_symbol_pnl.get(symbol,0.) for symbol,pnl in symbol_pnl.items())
         dividend_pnl=sum(entitlements.income_by_symbol.values())-sum(previous_income.values())
@@ -222,18 +231,19 @@ def build_portfolio_accounting(
             'receivables': entitlements.receivable,
             "daily_return": daily_return, "cash_weight": cash / nav, "gross_exposure": sum(values.values()) / nav,
             'daily_pnl':daily_pnl,'previous_equity':previous_nav,'price_pnl':price_pnl,'dividend_pnl':dividend_pnl,
-            'price_contribution':price_pnl/previous_nav if previous_nav else 0.,
-            'dividend_contribution':dividend_pnl/previous_nav if previous_nav else 0.,
+            'external_flow':external_flow,'return_base':return_base,
+            'price_contribution':price_pnl/return_base,
+            'dividend_contribution':dividend_pnl/return_base,
             'contribution_residual_pnl':contribution_residual,
-            'contribution_residual':contribution_residual/previous_nav if previous_nav else 0.,
+            'contribution_residual':contribution_residual/return_base,
             "net_exposure": sum(values.values()) / nav, "turnover_notional": turnover,
             "turnover": turnover / previous_nav if previous_nav else 0.0, "cost": fees,
-            "cash_contribution": cash_pnl / previous_nav if previous_nav else 0.0, "cash_pnl": cash_pnl,
-            "cost_contribution": -fees / previous_nav if previous_nav else 0.0,
+            "cash_contribution": cash_pnl / return_base, "cash_pnl": cash_pnl,
+            "cost_contribution": -fees / return_base,
             "benchmark_return": float(benchmark_returns[date]) if date in benchmark_returns else math.nan,
             "cash_return": float(cash_returns[date]) if date in cash_returns else math.nan,
             "factor_residual_pnl": residual if factor_values else math.nan,
-            "factor_residual_contribution": residual / previous_nav if factor_values and previous_nav else math.nan,
+            "factor_residual_contribution": residual / return_base if factor_values else math.nan,
             "reconciliation_delta": nav - cash - sum(values.values()) - entitlements.receivable,
         })
         previous_cash, previous_nav = cash, nav
@@ -241,6 +251,9 @@ def build_portfolio_accounting(
         previous_income=dict(entitlements.income_by_symbol)
 
     ledger = pd.DataFrame(ledger_rows)
+    performance=account_returns(dates=dates,nav=ledger.nav.tolist(),initial_cash=starting_cash,external_flows=external_flows)
+    ledger['unit_nav']=performance['unit_nav']
+    ledger['drawdown']=ledger.unit_nav/ledger.unit_nav.cummax().clip(lower=1.)-1
     symbols = pd.DataFrame(symbol_rows, columns=["trade_date", "symbol", "pnl",'daily_pnl','price_pnl','dividend_pnl', "contribution", "kind"])
     legs = pd.DataFrame(leg_rows, columns=["trade_date", "leg", "pnl", "contribution"])
     factors = pd.DataFrame(factor_rows, columns=["trade_date", "factor", "pnl", "contribution"])
@@ -280,6 +293,7 @@ def build_portfolio_accounting(
         "benchmark_status": benchmark_status,
         'corporate_action_events': entitlements.events,
         'dividend_tax': 'gross_before_tax' if any(a.action_type == 'cash_dividend' for a in entitlements.actions) else 'not_applied',
+        'external_flows':external_flows,'performance':performance,
     }
     risk = _risk(ledger, positions, prices, annualization_sessions, risk_window, industry_by_symbol, industry_pit_available)
     return PortfolioAccountingResult(ledger, symbols, legs, factors, risk, diagnostics)
