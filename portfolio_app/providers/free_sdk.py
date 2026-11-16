@@ -17,6 +17,7 @@ from .base import ProviderBatch, ProviderError
 from ..data import normalise_market_frame, build_data_quality_report
 from ..instrument_master import _date
 from ..snapshot_contracts import identity_hash
+from ..provider_normalize import source_previous_close, PREVIOUS_CLOSE_POLICY
 
 
 _LOCKS = {name: Lock() for name in ('sina','eastmoney','baostock')}
@@ -43,7 +44,7 @@ def _sdk_frame(name, symbol, start, end):
             result = bs.query_trade_dates(start_date=start,end_date=end)
         else:
             result = bs.query_history_k_data_plus(market.lower()+'.'+code,
-                'date,code,open,high,low,close,volume,amount,adjustflag,tradestatus',
+                'date,code,open,high,low,close,preclose,volume,amount,adjustflag,tradestatus',
                 start_date=start, end_date=end, frequency='d', adjustflag='3')
         rows = []
         while result.error_code == '0' and result.next():
@@ -147,10 +148,16 @@ class FreeDailyProvider:
         if self.name == 'baostock' and not frame.tradestatus.astype(str).eq('1').all():
             raise ProviderError('nontrading_rows', 'BaoStock包含停牌估值行，须经状态对齐后单独接入')
         frame['trade_date'], frame['ts_code'] = frame.date, symbol
+        try:
+            frame['source_pre_close'] = source_previous_close(frame,
+                'preclose' if self.name == 'baostock' else 'pre_close')
+        except ValueError:
+            raise ProviderError('invalid_values', '来源昨收无效') from None
         frame = frame.drop(columns='date')
         if not frame.empty:
             frame = normalise_market_frame(frame)
             frame['volume'] = frame.vol
+            frame['pre_close'] = frame['source_pre_close']
             if build_data_quality_report(frame)['status'] != '通过':
                 raise ProviderError('invalid_values', '免费日线质量检查未通过')
         missing = sorted(set(sessions)-set(frame.trade_date.dt.strftime('%Y-%m-%d') if not frame.empty else ()))
@@ -158,6 +165,7 @@ class FreeDailyProvider:
         frame.attrs['field_units'] = dict(price='CNY_per_share', volume='shares',amount='CNY',
             source_vol='lots_100_shares' if self.name=='eastmoney' else 'shares',source_amount='CNY')
         frame.attrs['normalization'] = dict(profile=self.name+'.sdk.raw',version='1.0',batch_id=batch_id)
+        frame.attrs['previous_close_policy'] = PREVIOUS_CLOSE_POLICY
         frame.attrs['research_dataset'] = dict(dataset_id=self.name+'.a_daily_raw',version=batch_id,price_basis='raw',source_kind='provider')
         if 'return_contract' in frame.attrs:
             frame.attrs['return_contract']['price_basis']='raw'

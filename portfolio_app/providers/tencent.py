@@ -13,6 +13,7 @@ from .base import ProviderBatch, ProviderError
 from ..data import normalise_market_frame, build_data_quality_report
 from ..instrument_master import _date
 from ..snapshot_contracts import identity_hash
+from ..provider_normalize import PREVIOUS_CLOSE_POLICY
 
 
 class TencentProvider:
@@ -108,6 +109,9 @@ class TencentProvider:
             raise ProviderError('invalid_values', '腾讯日线质量检查未通过')
         if not frame.empty:
             frame['volume'] = frame.vol
+        frame['source_pre_close'] = np.nan
+        frame['pre_close'] = np.nan
+        frame.attrs['previous_close_policy'] = PREVIOUS_CLOSE_POLICY
         missing = sorted(set(sessions) - set(selected.trade_date))
         batch_id = 'tencent-daily-' + identity_hash(dict(symbol=symbol, sessions=sessions, raw=raw.to_json(orient='split')))
         frame.attrs['field_units'] = dict(price='CNY_per_share', volume='shares', amount='CNY',

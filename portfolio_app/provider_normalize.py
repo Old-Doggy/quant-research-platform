@@ -6,6 +6,22 @@ from .data import normalise_market_frame, build_data_quality_report
 from .field_registry import daily_profile
 
 
+PREVIOUS_CLOSE_POLICY = 'explicit_source_only.v1'
+
+
+def source_previous_close(frame, field='pre_close'):
+    """Validate upstream quotes before the legacy normalizer can fill/coerce them."""
+    if field not in frame:
+        return pd.Series(np.nan, index=frame.index, dtype=float)
+    raw = frame[field]
+    numeric = pd.to_numeric(raw, errors='coerce')
+    if (raw.map(lambda value: isinstance(value, (bool, np.bool_))).any()
+            or (raw.notna() & numeric.isna()).any() or np.isinf(numeric).any()
+            or numeric.dropna().le(0).any()):
+        raise ValueError('来源昨收必须为正数；缺失不能用上一条收盘替代')
+    return numeric.astype(float)
+
+
 def normalize_daily(raw, *, profile, batch_id):
     contract = daily_profile(profile)
     if raw.attrs.get('normalization'):
@@ -24,6 +40,7 @@ def normalize_daily(raw, *, profile, batch_id):
     if dates.isna().any() or pd.DataFrame(dict(code=codes, day=dates)).duplicated().any():
         raise ValueError('日线日期无效或重复')
     frame = raw.copy(deep=True)
+    frame['source_pre_close'] = source_previous_close(raw)
     for field, multiplier, label in [(contract.volume_field, contract.volume_multiplier, '成交量'),
                                      (contract.amount_field, contract.amount_multiplier, '成交额')]:
         values = pd.to_numeric(raw[field], errors='coerce')
@@ -33,6 +50,8 @@ def normalize_daily(raw, *, profile, batch_id):
         if field == contract.volume_field and not np.allclose(frame[field].dropna(), frame[field].dropna().round(), atol=1e-6, rtol=0):
             raise ValueError('成交量归一后必须为整数股')
     frame = normalise_market_frame(frame)
+    frame['pre_close'] = frame['source_pre_close']
+    frame.attrs['previous_close_policy'] = PREVIOUS_CLOSE_POLICY
     # Match originals by key after the canonical sort, never by incoming row order.
     indexed = raw.assign(_date=dates).set_index(['ts_code', '_date'])
     keys = pd.MultiIndex.from_arrays([frame.ts_code, frame.trade_date])
