@@ -207,7 +207,14 @@ def _render_portfolio_workspace(frame, *, context_id, public_mode):
             variants.append(("首标的权重 60%", "weights", alternate))
         report = portfolio_scenarios(frames, recipe=recipe, spec=spec, strategy_key=strategy_key,
             params=params, initial_cash=initial_cash, variants=variants, token=token)
-        return dict(baseline=baseline, scenarios=report)
+        result = dict(baseline=baseline, scenarios=report)
+        if not public_mode:
+            from .result_replay import portfolio_replay_inputs
+            from .research_dataset import dataset_metadata
+            result['data_mode'] = dataset_metadata(next(iter(frames.values())))['source_kind']
+            result['replay'] = portfolio_replay_inputs(frames, recipe=recipe, spec=spec,
+                strategy_key=strategy_key, params=params, initial_cash=initial_cash)
+        return result
     with result_area:
         state = background_run(state, compute, workspace='portfolio', start=start, public_mode=public_mode)
         st.session_state["portfolio_workspace_run"] = state

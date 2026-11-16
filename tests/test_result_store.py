@@ -111,6 +111,25 @@ def test_fresh_python_process_reads_exact_saved_array(tmp_path):
     assert run.stdout.strip() == 'restored'
 
 
+def test_scenario_frame_nested_parameters_empty_dicts_and_objects_restore_exactly(tmp_path):
+    frame = pd.DataFrame({'scenario': ['baseline', 'changed'],
+        'config': [{'recipe': {'lower_bounds': {}, 'weights': {'A': .5}}}, None],
+        'mixed': pd.Series([1., 'unavailable'], dtype=object), 'tuple': [(1, 2), ()]})
+    store = ResultStore(tmp_path)
+    store.save('scenarios', key(), {'scenarios': frame})
+    restored = store.load('scenarios')['scenarios']
+    pd.testing.assert_frame_equal(restored, frame, check_exact=True)
+    assert restored.config.iloc[0]['recipe']['lower_bounds'] == {}
+
+
+def test_codec_rejection_closes_parquet_handle_and_leaves_no_published_result(tmp_path):
+    store = ResultStore(tmp_path)
+    with pytest.raises(TypeError):
+        store.save('bad-object', key(), {'frame': pd.DataFrame({'bad': [object()]})})
+    assert store.records() == []
+    assert not list(tmp_path.glob('.result-*'))
+
+
 def test_actual_cash_account_result_restores_ledger_fills_and_drilldown(tmp_path):
     from portfolio_app.offline_execution import ExecutionSpec
     from portfolio_app.portfolio_recipe import PortfolioRecipe

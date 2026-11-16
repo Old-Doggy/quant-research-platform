@@ -4,7 +4,7 @@ import math
 
 import streamlit as st
 
-from .research_charts import build_performance_chart, build_time_series_chart, CHART_CONFIG
+from .research_charts import build_performance_chart, build_ic_chart, CHART_CONFIG
 from .research_diagnostics import show_safe_error
 from .result_history import result_projection, WORKSPACES
 from .result_store import ResultStore
@@ -68,8 +68,8 @@ def render_result_history(*, public_mode):
                 benchmark='benchmark_nav' if 'benchmark_nav' in curve else None,
                 revision=selected), width='stretch', config=CHART_CONFIG, key='saved_result_curve')
         elif ic is not None and not ic.empty:
-            st.plotly_chart(build_time_series_chart(ic, {'ic': 'IC'},
-                title='因子 IC', revision=selected), width='stretch', config=CHART_CONFIG, key='saved_result_ic')
+            st.plotly_chart(build_ic_chart(ic, revision=selected),
+                width='stretch', config=CHART_CONFIG, key='saved_result_ic')
         else:
             st.caption('这次运行没有保存连续曲线，可在表格中查看已有明细。')
     tables = projection['tables']
@@ -94,6 +94,9 @@ def render_result_history(*, public_mode):
                     from .result_replay import replay_saved
                     with st.spinner('核对保存输入与计算结果…'):
                         report = replay_saved(store, selected)
-                    st.success(f"{report['rows']:,} 个交易日逐点一致，指标与 {report['trade_events']:,} 条交易记录一致。")
+                    if report['kind'] == 'factor':
+                        st.success(f"{report['sessions']:,} 个交易日、{report['rows']:,} 条截面记录一致；IC、分组收益与换手一致。")
+                    else:
+                        st.success(f"{report['sessions']:,} 个交易日逐点一致，指标与 {report['trade_events']:,} 条交易记录一致。")
                 except Exception as exc:
                     show_safe_error(exc, operation='replay')

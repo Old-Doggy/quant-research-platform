@@ -2,6 +2,7 @@
 from dataclasses import fields, is_dataclass
 from datetime import date, datetime
 import hashlib
+import json
 import math
 import re
 
@@ -58,13 +59,21 @@ class ResultCodec:
             owned = value.copy(deep=True)
             owned.attrs = {}
             frame = owned.to_frame(name='value') if isinstance(value, pd.Series) else owned
-            frame.to_parquet(self.directory / name, index=True)
-            with (self.directory / name).open('r+b') as stream:
+            object_columns = []
+            for position in range(len(frame.columns)):
+                if frame.iloc[:, position].dtype == object:
+                    object_columns.append(position)
+                    encoded = [json.dumps(child(v), ensure_ascii=False, allow_nan=False) for v in frame.iloc[:, position]]
+                    frame.isetitem(position, pd.Series(encoded, index=frame.index, dtype=object))
+            # Own the handle so Arrow errors close it before Windows staging cleanup.
+            with (self.directory / name).open('w+b') as stream:
+                frame.to_parquet(stream, index=True)
+                stream.flush()
                 import os
                 os.fsync(stream.fileno())
             self.files[name] = file_hash(self.directory / name)
             return ['series' if isinstance(value, pd.Series) else 'frame',
-                name, attrs, child(value.name) if isinstance(value, pd.Series) else None]
+                name, attrs, child(value.name) if isinstance(value, pd.Series) else None, object_columns]
         if is_dataclass(value) and type(value).__name__ in _types() and _types()[type(value).__name__] is type(value):
             return ['record', type(value).__name__, {f.name: child(getattr(value, f.name)) for f in fields(value)}]
         if isinstance(value, dict): return ['mapping', [[child(k), child(v)] for k, v in value.items()]]
@@ -89,13 +98,16 @@ class ResultCodec:
             return tuple(result) if kind == 'tuple' else result
         if kind == 'record' and len(node) == 3 and node[1] in _types():
             return _types()[node[1]](**{k: child(v) for k, v in node[2].items()})
-        if kind in ('frame', 'series') and len(node) == 4:
+        if kind in ('frame', 'series') and len(node) in (4, 5):
             name = node[1]
             if not isinstance(name, str) or not re.fullmatch(r'array-\d{4,}\.parquet', name) or name not in self.files:
                 raise ValueError('结果数组引用无效')
             if file_hash(self.directory / name) != self.files[name]:
                 raise ValueError('结果数组校验失败')
             frame = pd.read_parquet(self.directory / name)
+            for position in node[4] if len(node) == 5 else []:
+                decoded = [child(json.loads(v)) for v in frame.iloc[:, position]]
+                frame.isetitem(position, pd.Series(decoded, index=frame.index, dtype=object))
             value = frame.iloc[:, 0].rename(child(node[3])) if kind == 'series' else frame
             value.attrs = child(node[2])
             return value

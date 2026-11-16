@@ -65,3 +65,70 @@ def test_unknown_replay_type_is_data_not_callable(tmp_path):
     save(store, {'replay': {'kind': 'os.system', 'command': 'do not execute'}})
     with pytest.raises(ValueError):
         replay_saved(store, 'replay')
+
+
+def test_cash_account_replay_checks_ledger_positions_orders_and_fees(tmp_path):
+    from portfolio_app.offline_execution import ExecutionSpec
+    from portfolio_app.portfolio_recipe import PortfolioRecipe
+    from portfolio_app.portfolio_workspace import run_portfolio_workspace
+    from portfolio_app.result_replay import portfolio_replay_inputs
+    frame, params, _ = fixture()
+    frame['tradability'] = 'tradable'
+    frame.loc[35, 'tradability'] = 'suspended'
+    recipe = PortfolioRecipe.from_dict(dict(recipe_id='replay', target_weights={'FIXTURE': .8},
+        cash_weight=.2, lot_size=1))
+    spec = ExecutionSpec('next-close', 'close', 'next_close', 10, 0, 'us_stock')
+    result = run_portfolio_workspace({'FIXTURE': frame}, recipe=recipe, spec=spec,
+        strategy_key='trend', params=params, initial_cash=10000.)
+    replay = portfolio_replay_inputs({'FIXTURE': frame}, recipe=recipe, spec=spec,
+        strategy_key='trend', params=params, initial_cash=10000.)
+    assert 'tradability' in replay['frames']['FIXTURE']
+    store = ResultStore(tmp_path)
+    save(store, {'baseline': result, 'replay': replay})
+    report = replay_saved(store, 'replay')
+    assert report['status'] == 'matched' and report['rows'] == 100
+    assert report['trade_events'] == len(result.fills)
+    changed = copy.deepcopy(result)
+    changed.fills[0]['fee'] += 1.
+    save(store, {'baseline': changed, 'replay': replay}, 'changed-fee')
+    with pytest.raises(ValueError, match='不一致'):
+        replay_saved(store, 'changed-fee')
+
+
+def test_factor_replay_checks_ic_group_returns_turnover_and_cross_sections(tmp_path):
+    from portfolio_app.factor_compute import BASIC_FACTOR_SPECS
+    from portfolio_app.factor_workspace import FactorResearchConfig
+    from portfolio_app.factor_research_job import FactorResearchJobService
+    from portfolio_app.result_replay import factor_replay_inputs
+    frame, _, _ = fixture()
+    frame['vol'] = frame.volume
+    all_frames = [frame.assign(symbol=s, close=frame.close * (1 + i * .01)) for i, s in enumerate(('AAA', 'BBB', 'CCC'))]
+    data = pd.concat(all_frames, ignore_index=True)
+    # Use valid OHLC for each synthetic security.
+    for field in ('open', 'high', 'low'): data[field] = data.close
+    config = FactorResearchConfig('basic.return_20d', 'fixture', str(data.trade_date.min().date()),
+        str(data.trade_date.max().date()), min_assets_per_date=3, quantiles=3, max_missing_ratio=.6)
+    job = FactorResearchJobService(specs=BASIC_FACTOR_SPECS).submit(data, config)
+    assert job.result is not None
+    value = {**job.result, 'replay': factor_replay_inputs(data, config=config)}
+    store = ResultStore(tmp_path)
+    save(store, value)
+    report = replay_saved(store, 'replay')
+    assert report['status'] == 'matched' and report['rows'] == len(job.result['detail'])
+    changed = copy.deepcopy(value)
+    changed['analysis']['ic_series'][0]['ic'] = .9999
+    save(store, changed, 'changed-ic')
+    with pytest.raises(ValueError, match='不一致'):
+        replay_saved(store, 'changed-ic')
+
+
+def test_factor_zip_export_excludes_internal_replay_dataframe():
+    from portfolio_app.factor_research_view import factor_export_result
+    from portfolio_app.factor_research_archive import save_factor_archive, open_factor_archive
+    result = {'config': {'disclosure_mode': 'private_local'}, 'analysis': {'ic_series': []},
+        'replay': {'frame': pd.DataFrame({'close': [1.]})}, 'data_mode': 'synthetic'}
+    exported = factor_export_result(result)
+    assert 'replay' not in exported
+    archive = save_factor_archive(result['config'], exported)
+    assert open_factor_archive(archive)[2]['analysis'] == result['analysis']
+    assert 'replay' in result

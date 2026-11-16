@@ -22,6 +22,11 @@ from .research_display import envelope_sample, render_paged_table, check_researc
 from .ui_copy import format_count, format_percent, format_research_status
 
 
+def factor_export_result(result):
+    """Keep the legacy JSON ZIP contract free of internal replay arrays."""
+    return {k: v for k, v in result.items() if k != 'replay'}
+
+
 def _finite_numbers(values):
     output = []
     for value in values:
@@ -195,7 +200,12 @@ def _render_factor_research(frame, *, public_mode):
         job = service.submit(frame, config, token=token)
         if job.status is not JobStatus.SUCCEEDED:
             raise ValueError(job.error or 'factor research blocked')
-        return job.result
+        result = dict(job.result)
+        if not public_mode:
+            from .result_replay import factor_replay_inputs
+            result['replay'] = factor_replay_inputs(frame, config=config)
+            result['data_mode'] = metadata['source_kind']
+        return result
     task, computed = background_task(workspace='factors', identity=identity,
         compute=compute, start=start, public_mode=public_mode)
     with result_area:
@@ -270,7 +280,7 @@ def _render_factor_research(frame, *, public_mode):
             render_paged_table(pd.DataFrame(result['detail']), key='factor_detail')
             if not public_mode:
                 archive = prepared_download(key='_factor_archive_bytes', identity=result['run_id'],
-                    build=lambda: save_factor_archive(result['config'], result))
+                    build=lambda: save_factor_archive(result['config'], factor_export_result(result)))
                 st.download_button('下载本地因子归档', archive, 'factor-research-local.zip',
                                    mime='application/zip', key='factor_local_archive')
 
