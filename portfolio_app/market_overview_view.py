@@ -143,4 +143,5 @@ def render_market_overview(store, manifest):
     st.download_button('下载当日明细', table.to_csv(index=False).encode('utf-8-sig'),
         file_name=f'market-scope-{session}-v{report["generation"]}.csv', mime='text/csv',
         key='market_overview_csv')
-    return None
+    from .market_watchlist import render_watchlist_trends
+    return render_watchlist_trends(store,manifest,session=session)

@@ -59,6 +59,18 @@ def test_live_browsing_tracks_generation_while_pinned_link_and_research_result_s
     restored.run()
     assert restored.button_group(key='market_watch_section').value=='证券行情'
     assert not restored.exception
+    restored.button(key='market_watch_favorite').click().run()
+    from portfolio_app.watchlist import WatchlistStore
+    assert WatchlistStore(tmp_path/'watchlist.json').symbols==['600000.SH']
+    restored.button_group(key='market_watch_section').set_value('范围概览').run()
+    assert not restored.exception
+    favorites=restored.dataframe[-1].value
+    assert favorites['证券'].tolist()==['600000.SH']
+    assert favorites['走势覆盖'].tolist()==['1 / 1']
+    assert favorites['近期价格走势（%）'].tolist()==[[0.]]
+    restored.button_group(key='market_watch_section').set_value('证券行情').run()
+    restored.button(key='market_watch_favorite').click().run()
+    assert WatchlistStore(tmp_path/'watchlist.json').symbols==[]
 
 
 def test_browsing_context_does_not_reuse_strategy_or_change_previous_context():

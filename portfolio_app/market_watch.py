@@ -109,8 +109,12 @@ def render_market_watch(route, dependencies):
     if key not in st.session_state and route.context.symbol in scope['symbols']:
         st.session_state[key]=route.context.symbol
     names={r['symbol']:r['name'] for r in manifest['instrument_master']['records']}
-    symbol=st.selectbox('证券',scope['symbols'],key=key,filter_mode=None,
+    security_column,favorite_column=st.columns([4,1],vertical_alignment='bottom')
+    symbol=security_column.selectbox('证券',scope['symbols'],key=key,filter_mode=None,
         format_func=lambda code:f'{code} · {names.get(code, "")}')
+    from .market_watchlist import render_watchlist_toggle
+    with favorite_column:
+        render_watchlist_toggle(symbol)
     try:
         frame=query_daily(store,chosen,symbols=[symbol],start=scope['start'],end=scope['end'],
             columns=['symbol','ts_code','trade_date','open','high','low','close','vol','volume','amount','pre_close'])
