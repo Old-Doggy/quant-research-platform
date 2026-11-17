@@ -17,21 +17,25 @@ def page_frame(frame, *, page, page_size=100):
 
 
 def envelope_sample(frame, *, value, max_points=600):
-    """Retain bucket min/max and one missing-value marker, plus endpoints."""
-    if max_points < 5:
-        raise ValueError('at least five points required')
+    """Retain each plotted series' extrema and gaps within the total budget."""
+    columns=[value] if isinstance(value,str) else list(dict.fromkeys(value))
+    if not columns or max_points < 2+3*len(columns):
+        raise ValueError('point budget requires endpoints and three points per series')
     if len(frame) <= max_points:
         return frame.copy()
     indices = {0, len(frame) - 1}
-    for bucket in np.array_split(np.arange(1, len(frame) - 1), max(1, (max_points - 2) // 3)):
-        values = pd.to_numeric(frame.iloc[bucket][value], errors='coerce').to_numpy()
-        finite = np.isfinite(values)
-        if finite.any():
-            available = bucket[finite]
-            indices.add(int(available[np.argmin(values[finite])]))
-            indices.add(int(available[np.argmax(values[finite])]))
-        if not finite.all():
-            indices.add(int(bucket[np.flatnonzero(~finite)[0]]))
+    arrays=[pd.to_numeric(frame[column],errors='coerce').to_numpy(dtype=float,na_value=np.nan) for column in columns]
+    buckets=max(1,(max_points-2)//(3*len(columns)))
+    for bucket in np.array_split(np.arange(1, len(frame) - 1), buckets):
+        for array in arrays:
+            values=array[bucket]
+            finite = np.isfinite(values)
+            if finite.any():
+                available = bucket[finite]
+                indices.add(int(available[np.argmin(values[finite])]))
+                indices.add(int(available[np.argmax(values[finite])]))
+            if not finite.all():
+                indices.add(int(bucket[np.flatnonzero(~finite)[0]]))
     return frame.iloc[sorted(indices)].copy()
 
 

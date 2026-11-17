@@ -289,7 +289,7 @@ def _render_portfolio_workspace(frame, *, context_id, public_mode):
                 if 'unit_nav' not in curve:
                     curve["unit_nav"] = curve.nav / result.config['initial_cash']
                 curve["drawdown"] = curve.unit_nav / curve.unit_nav.cummax().clip(lower=1.) - 1
-                curve = envelope_sample(curve, value='nav')
+                curve = envelope_sample(curve, value=['unit_nav','drawdown'])
                 def select_chart_date():
                     from .chart_events import accept_chart_event, plotly_date_event
                     event = st.session_state.get("portfolio_nav", {})
@@ -404,7 +404,7 @@ def _render_portfolio_workspace(frame, *, context_id, public_mode):
                     st.caption(f"有效样本 {risk.get('observations', '—')} · 状态 {risk.get('status', '—')}")
                 help_link('风险指标说明', _explain_320, key='portfolio_workspace_view_help_320')
                 exposure = view["curve"][["trade_date", "cash_weight", "gross_exposure", "net_exposure"]].copy()
-                exposure = envelope_sample(exposure, value="gross_exposure")
+                exposure = envelope_sample(exposure, value=['gross_exposure','cash_weight'])
                 exposure_fig = build_time_series_chart(exposure,
                     {'cash_weight':'现金比例', 'gross_exposure':'股票暴露'}, title='现金与股票暴露',
                     revision=f'exposure-{run_id}-{date}')
