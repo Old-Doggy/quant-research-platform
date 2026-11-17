@@ -106,113 +106,133 @@ def _render_single_strategy_result_payload(
         f"夏普 {sharpe_display}"
     )
 
-    curve_tab, overview, trades_tab, costs_tab, params_tab, limits_tab, archive_tab = st.tabs(
-        ["净值与回撤", "结果摘要", "买卖事件", "成交与成本", "参数敏感性", "研究限制", "归档与复现"]
-    )
-    with overview:
-        metrics = performance.get("metrics", {}) if isinstance(performance, dict) else {}
-        metrics = metrics if isinstance(metrics, dict) else {}
-        st.write("研究状态：已完成离线研究模拟。")
-        st.caption(
-            f"研究区间：{payload.get('research_diagnostics', {}).get('date_start', '未提供')} 至 "
-            f"{payload.get('research_diagnostics', {}).get('date_end', '未提供')} · "
-            f"执行口径：{metrics.get('execution_policy_label', '下一交易日收盘（离线研究假设）')}"
-        )
-        diagnostics = payload.get("research_diagnostics", {})
-        if isinstance(diagnostics, dict):
-            quality = diagnostics.get("data_quality", {})
-            quality_status = quality.get("status", "未知") if isinstance(quality, dict) else "未知"
-            st.dataframe(pd.DataFrame([
-                {"研究检查": "数据质量", "结果": quality_status},
-                {"研究检查": "预热期", "结果": f"{int(diagnostics.get('warmup_bars', 0) or 0)} 根"},
-                {"研究检查": "信号覆盖率", "结果": f"{float(diagnostics.get('signal_coverage', 0.0) or 0.0):.2%}"},
-                {"研究检查": "研究限制", "结果": "；".join(limitations)},
-            ]), width="stretch", hide_index=True)
-    with curve_tab:
-        curve = pd.DataFrame(performance.get("curve", []))
-        if curve.empty:
-            st.info("当前结果没有可展示的净值曲线。")
-        else:
-            curve["trade_date"] = pd.to_datetime(curve.pop("date"))
-            curve["equity"] = curve.pop("nav")
-            curve["benchmark_equity"] = curve.pop("benchmark_nav")
-            curve["drawdown"] = pd.to_numeric(curve.get("drawdown"), errors="coerce")
-            st.plotly_chart(build_performance_chart(curve, nav="equity", benchmark="benchmark_equity",
-                revision=f"strategy-{state.run_id}"), width="stretch", config=CHART_CONFIG,
-                key=f"explicit-performance-{state.run_id}")
-            def _explain_141():
-                st.write('净值已扣设定成本；灰线为同标的买入持有，回撤相对策略历史峰值。拖动框选缩放，双击复位，点击图例显隐。')
-            help_link('图表与计算说明', _explain_141, key='research_workspace_help_141')
-    with trades_tab:
-        trade_frame = build_strategy_result_trade_frame(details)
-        if trade_frame.empty:
-            st.info("当前参数和区间没有产生买卖事件。")
-        else:
-            st.caption("信号 → 订单 → 模拟成交")
-            st.dataframe(trade_frame, width="stretch", hide_index=True)
-        position_frame = build_strategy_result_position_frame(details)
-        with st.expander("现金与持仓快照", expanded=False):
-            if position_frame.empty:
-                st.info("当前结果没有成交，因此没有现金与持仓快照。")
-            else:
-                st.dataframe(position_frame, width="stretch", hide_index=True)
-    with costs_tab:
-        cost_assumption = performance.get("cost_assumption", {})
-        cost_assumption = cost_assumption if isinstance(cost_assumption, dict) else {}
-        cost_metrics = performance.get("metrics", {})
-        cost_metrics = cost_metrics if isinstance(cost_metrics, dict) else {}
-        cost_columns = st.columns(3)
-        cost_columns[0].metric("单次换手成本", f"{float(cost_assumption.get('transaction_cost', 0.0)):.2%}")
-        cost_columns[1].metric("累计成本", f"{float(cost_metrics.get('total_cost', 0.0)):.2%}")
-        cost_columns[2].metric("产生成本的交易日", str(int(performance.get("diagnostics", {}).get("cost_rows", 0) or 0)))
-        st.caption("成本 = 持仓换手 × 设定费率")
-        cost_frame = build_strategy_result_cost_frame(performance)
-        if cost_frame.empty:
-            st.info("当前结果没有产生成本记录。")
-        else:
-            for column in ("日收益", "日成本"):
-                cost_frame[column] = cost_frame[column].map(lambda value: "—" if pd.isna(value) else f"{float(value):.2%}")
-            st.dataframe(cost_frame, width="stretch", hide_index=True)
-    with params_tab:
-        st.subheader("当前运行参数")
-        st.dataframe(pd.DataFrame([{"参数": key, "值": value} for key, value in strategy_params.items()]), width="stretch", hide_index=True)
-        sensitivity = pd.DataFrame(payload.get("sensitivity", []))
-        if sensitivity.empty:
-            st.info("当前结果没有参数敏感性记录。")
-        else:
-            from .research_charts import build_metric_bars
-            if {'scenario_id', 'total_return'}.issubset(sensitivity.columns):
-                shown = sensitivity.copy()
-                shown['场景'] = shown.scenario_id.map(lambda v: str(v).replace('baseline','基准').replace('transaction-cost-','费率 ').replace('slippage-bps-','滑点（基点） ').replace('parameter-neighbor-','参数邻域 ').replace('neighbor-','邻域 ').replace('fast_window','短期窗口').replace('slow_window','长期窗口').replace('execution-policy-next_day_open','次日开盘执行'))
-                st.plotly_chart(build_metric_bars(shown, category='场景', value='total_return',
-                    title='参数与成本场景 · 区间收益', revision=f'sensitivity-{state.run_id}'),
-                    width='stretch', config=CHART_CONFIG)
-            with st.expander('场景数据明细'):
-                st.dataframe(sensitivity, width="stretch", hide_index=True)
-    with limits_tab:
-        config = payload.get("strategy_config", {})
-        config = config if isinstance(config, dict) else {}
-        st.subheader("策略规则")
-        for rule in config.get("rules", []):
-            st.write(f"• {rule}")
-        st.dataframe(pd.DataFrame([{"参数": key, "值": value} for key, value in strategy_params.items()]), width="stretch", hide_index=True)
-        st.subheader("研究限制")
-        for limitation in limitations:
-            st.write(f"• {limitation}")
-        render_run_audit(payload.get("run_manifest", {}), integrity=payload.get("integrity", {}), public_mode=PUBLIC_MODE)
-    with archive_tab:
-        archive = payload.get("archive")
-        if archive is None:
-            st.info("当前结果没有可下载归档。")
-        else:
-            st.write("归档包含运行口径、数据指纹、策略结果详情和限制说明，可用于本地复核。")
-            st.download_button(
-                "下载本地策略结果归档",
-                data=json.dumps(archive, ensure_ascii=False, indent=2),
-                file_name=f"{state.run_id}-strategy-result-archive.json",
-                mime="application/json",
-                key=f"download-explicit-strategy-archive-{state.run_id}",
+    performance_tab,trades_tab,costs_panel,records_panel=st.tabs(
+        ['净值表现','买卖事件','成本与参数','研究记录'],key='strategy_main_view',on_change='rerun')
+    detail=None
+    if performance_tab.open:
+        with performance_tab:
+            detail=st.segmented_control('表现视图',['净值与回撤','结果摘要'],default='净值与回撤',
+                required=True,key='strategy_performance_detail')
+    if costs_panel.open:
+        with costs_panel:
+            detail=st.segmented_control('分析视图',['成交与成本','参数敏感性'],default='成交与成本',
+                required=True,key='strategy_analysis_detail')
+    if records_panel.open:
+        with records_panel:
+            detail=st.segmented_control('研究记录',['规则与口径','归档与复现'],default='规则与口径',
+                required=True,key='strategy_records_detail')
+    if performance_tab.open and detail=='结果摘要':
+        with performance_tab:
+            metrics = performance.get("metrics", {}) if isinstance(performance, dict) else {}
+            metrics = metrics if isinstance(metrics, dict) else {}
+            st.write("研究状态：已完成离线研究模拟。")
+            st.caption(
+                f"研究区间：{payload.get('research_diagnostics', {}).get('date_start', '未提供')} 至 "
+                f"{payload.get('research_diagnostics', {}).get('date_end', '未提供')} · "
+                f"执行口径：{metrics.get('execution_policy_label', '下一交易日收盘（离线研究假设）')}"
             )
+            diagnostics = payload.get("research_diagnostics", {})
+            if isinstance(diagnostics, dict):
+                quality = diagnostics.get("data_quality", {})
+                quality_status = quality.get("status", "未知") if isinstance(quality, dict) else "未知"
+                st.dataframe(pd.DataFrame([
+                    {"研究检查": "数据质量", "结果": quality_status},
+                    {"研究检查": "预热期", "结果": f"{int(diagnostics.get('warmup_bars', 0) or 0)} 根"},
+                    {"研究检查": "信号覆盖率", "结果": f"{float(diagnostics.get('signal_coverage', 0.0) or 0.0):.2%}"},
+                    {"研究检查": "研究限制", "结果": "；".join(limitations)},
+                ]), width="stretch", hide_index=True)
+    if performance_tab.open and detail=='净值与回撤':
+        with performance_tab:
+            curve = pd.DataFrame(performance.get("curve", []))
+            if curve.empty:
+                st.info("当前结果没有可展示的净值曲线。")
+            else:
+                curve["trade_date"] = pd.to_datetime(curve.pop("date"))
+                curve["equity"] = curve.pop("nav")
+                curve["benchmark_equity"] = curve.pop("benchmark_nav")
+                curve["drawdown"] = pd.to_numeric(curve.get("drawdown"), errors="coerce")
+                st.plotly_chart(build_performance_chart(curve, nav="equity", benchmark="benchmark_equity",
+                    revision=f"strategy-{state.run_id}"), width="stretch", config=CHART_CONFIG,
+                    key=f"explicit-performance-{state.run_id}")
+                def _explain_141():
+                    st.write('净值已扣设定成本；灰线为同标的买入持有，回撤相对策略历史峰值。拖动框选缩放，双击复位，点击图例显隐。')
+                help_link('图表与计算说明', _explain_141, key='research_workspace_help_141')
+    if trades_tab.open:
+        with trades_tab:
+            trade_frame = build_strategy_result_trade_frame(details)
+            if trade_frame.empty:
+                st.info("当前参数和区间没有产生买卖事件。")
+            else:
+                from .strategy_event_view import render_strategy_events
+                render_strategy_events(performance,trade_frame,revision=f'strategy-events-{state.run_id}')
+            position_frame = build_strategy_result_position_frame(details)
+            with st.expander("单位化事件账本", expanded=False):
+                st.caption("按单位买卖记录现金与数量；比例净值见净值表现，金额不代表策略账户资产。")
+                if position_frame.empty:
+                    st.info("当前结果没有成交，因此没有现金与持仓快照。")
+                else:
+                    st.dataframe(position_frame, width="stretch", hide_index=True)
+    if costs_panel.open and detail=='成交与成本':
+        with costs_panel:
+            cost_assumption = performance.get("cost_assumption", {})
+            cost_assumption = cost_assumption if isinstance(cost_assumption, dict) else {}
+            cost_metrics = performance.get("metrics", {})
+            cost_metrics = cost_metrics if isinstance(cost_metrics, dict) else {}
+            cost_columns = st.columns(3)
+            cost_columns[0].metric("单次换手成本", f"{float(cost_assumption.get('transaction_cost', 0.0)):.2%}")
+            cost_columns[1].metric("累计成本", f"{float(cost_metrics.get('total_cost', 0.0)):.2%}")
+            cost_columns[2].metric("产生成本的交易日", str(int(performance.get("diagnostics", {}).get("cost_rows", 0) or 0)))
+            st.caption("成本 = 持仓换手 × 设定费率")
+            cost_frame = build_strategy_result_cost_frame(performance)
+            if cost_frame.empty:
+                st.info("当前结果没有产生成本记录。")
+            else:
+                for column in ("日收益", "日成本"):
+                    cost_frame[column] = cost_frame[column].map(lambda value: "—" if pd.isna(value) else f"{float(value):.2%}")
+                st.dataframe(cost_frame, width="stretch", hide_index=True)
+    if costs_panel.open and detail=='参数敏感性':
+        with costs_panel:
+            st.subheader("当前运行参数")
+            st.dataframe(pd.DataFrame([{"参数": key, "值": value} for key, value in strategy_params.items()]), width="stretch", hide_index=True)
+            sensitivity = pd.DataFrame(payload.get("sensitivity", []))
+            if sensitivity.empty:
+                st.info("当前结果没有参数敏感性记录。")
+            else:
+                from .research_charts import build_metric_bars
+                if {'scenario_id', 'total_return'}.issubset(sensitivity.columns):
+                    shown = sensitivity.copy()
+                    shown['场景'] = shown.scenario_id.map(lambda v: str(v).replace('baseline','基准').replace('transaction-cost-','费率 ').replace('slippage-bps-','滑点（基点） ').replace('parameter-neighbor-','参数邻域 ').replace('neighbor-','邻域 ').replace('fast_window','短期窗口').replace('slow_window','长期窗口').replace('execution-policy-next_day_open','次日开盘执行'))
+                    st.plotly_chart(build_metric_bars(shown, category='场景', value='total_return',
+                        title='参数与成本场景 · 区间收益', revision=f'sensitivity-{state.run_id}'),
+                        width='stretch', config=CHART_CONFIG)
+                with st.expander('场景数据明细'):
+                    st.dataframe(sensitivity, width="stretch", hide_index=True)
+    if records_panel.open and detail=='规则与口径':
+        with records_panel:
+            config = payload.get("strategy_config", {})
+            config = config if isinstance(config, dict) else {}
+            st.subheader("策略规则")
+            for rule in config.get("rules", []):
+                st.write(f"• {rule}")
+            st.dataframe(pd.DataFrame([{"参数": key, "值": value} for key, value in strategy_params.items()]), width="stretch", hide_index=True)
+            st.subheader("研究限制")
+            for limitation in limitations:
+                st.write(f"• {limitation}")
+            render_run_audit(payload.get("run_manifest", {}), integrity=payload.get("integrity", {}), public_mode=PUBLIC_MODE)
+    if records_panel.open and detail=='归档与复现':
+        with records_panel:
+            archive = payload.get("archive")
+            if archive is None:
+                st.info("当前结果没有可下载归档。")
+            else:
+                st.write("归档包含运行口径、数据指纹、策略结果详情和限制说明，可用于本地复核。")
+                st.download_button(
+                    "下载本地策略结果归档",
+                    data=json.dumps(archive, ensure_ascii=False, indent=2),
+                    file_name=f"{state.run_id}-strategy-result-archive.json",
+                    mime="application/json",
+                    key=f"download-explicit-strategy-archive-{state.run_id}",
+                )
 
 
 def _render_explicit_research_workspace(route_state) -> None:
