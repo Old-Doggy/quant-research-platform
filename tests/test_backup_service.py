@@ -122,3 +122,89 @@ def test_observation_selection_validates_service_and_artifact_coverage(tmp_path)
     path.write_text(json.dumps({**value,'checksum':identity_hash(value)}))
     with pytest.raises(ValueError): restore_backup(tmp_path/'backup',tmp_path/'restored')
     assert not (tmp_path/'restored').exists()
+
+
+def test_user_state_restore_keeps_favorites_screens_and_safe_task_history(tmp_path):
+    from portfolio_app.backup_service import create_backup,restore_backup
+    from portfolio_app.watchlist import WatchlistStore
+    from portfolio_app.research_runtime import TaskJournal
+    root,store,manifest,results=seed(tmp_path)
+    favorites=WatchlistStore(root/'watchlist.json');favorites.add('600000.SH');favorites.record_recent('000001.SZ')
+    tasks=TaskJournal(root/'workbench_tasks/tasks.sqlite')
+    tasks.begin('running','key')
+    tasks.begin('saved','key');tasks.finish('saved','succeeded',result_id='fixture-run')
+    tasks.begin('not-selected','key');tasks.finish('not-selected','succeeded',result_id='other-run')
+    receipt=create_backup(root,tmp_path/'backup',snapshot_ids=[manifest['snapshot_id']],
+        result_ids=['fixture-run'],include_user_state=True)
+    assert receipt['user_state']['tasks']==3
+    restore_backup(tmp_path/'backup',tmp_path/'restored')
+    restored=tmp_path/'restored'
+    assert WatchlistStore(restored/'watchlist.json').symbols==['600000.SH']
+    assert WatchlistStore(restored/'watchlist.json').recent==['000001.SZ']
+    records={r['task_id']:r for r in TaskJournal(restored/'workbench_tasks/tasks.sqlite').records()}
+    assert records['running']['status']=='interrupted'
+    assert records['saved']['result_available']
+    assert not records['not-selected']['result_available']
+    assert not any('.env' in name for name in receipt['files'])
+
+
+def test_user_state_invalid_watchlist_rejected_without_publishing(tmp_path):
+    from portfolio_app.backup_service import create_backup
+    root,_,manifest,_=seed(tmp_path)
+    (root/'watchlist.json').write_text('{bad')
+    with pytest.raises(ValueError):
+        create_backup(root,tmp_path/'backup',snapshot_ids=[manifest['snapshot_id']],result_ids=[],include_user_state=True)
+    assert not (tmp_path/'backup').exists()
+
+
+def test_favorites_only_backup_requires_no_market_or_results(tmp_path):
+    from portfolio_app.backup_service import create_backup,restore_backup
+    from portfolio_app.watchlist import WatchlistStore
+    root=tmp_path/'state'
+    WatchlistStore(root/'watchlist.json').add('600000.SH')
+    create_backup(root,tmp_path/'backup',snapshot_ids=[],result_ids=[],include_user_state=True)
+    restore_backup(tmp_path/'backup',tmp_path/'restored')
+    assert WatchlistStore(tmp_path/'restored/watchlist.json').symbols==['600000.SH']
+    with pytest.raises(ValueError,match='布尔'):
+        create_backup(root,tmp_path/'invalid',snapshot_ids=[],result_ids=[],include_user_state='false')
+
+
+def test_user_state_screen_requires_included_snapshot(tmp_path):
+    from portfolio_app.backup_service import create_backup,restore_backup
+    from portfolio_app.screener_store import ScreenerStore
+    from portfolio_app.screener import screen_daily
+    root,store,manifest,_=seed(tmp_path)
+    from test_screener import frame as fixture_frame
+    from test_market_overview import snapshot
+    screen_manifest=snapshot();screen_manifest['snapshot_id']=manifest['snapshot_id']
+    config=dict(schema='daily-screener.v1',snapshot_id=manifest['snapshot_id'],session='2025-01-03',
+        universe_policy='snapshot_listed_on_session',conditions=[])
+    selected=ScreenerStore(root/'screening')
+    screen=selected.save('saved',screen_daily(fixture_frame(),manifest=screen_manifest,config=config),x='amount',y='close')
+    with pytest.raises(ValueError,match='快照'):
+        create_backup(root,tmp_path/'missing',snapshot_ids=[],result_ids=['fixture-run'],include_user_state=True)
+    create_backup(root,tmp_path/'backup',snapshot_ids=[manifest['snapshot_id']],result_ids=[],include_user_state=True)
+    restore_backup(tmp_path/'backup',tmp_path/'restored')
+    assert ScreenerStore(tmp_path/'restored/screening').open(screen)==selected.open(screen)
+
+
+def test_restore_rejects_task_reference_outside_selected_results(tmp_path):
+    from portfolio_app.backup_service import create_backup,restore_backup
+    from portfolio_app.research_runtime import TaskJournal
+    from portfolio_app.snapshot_contracts import identity_hash
+    from portfolio_app.result_codec import file_hash
+    root,_,manifest,_=seed(tmp_path)
+    journal=TaskJournal(root/'workbench_tasks/tasks.sqlite')
+    journal.begin('one','key');journal.finish('one','succeeded',result_id='fixture-run')
+    create_backup(root,tmp_path/'backup',snapshot_ids=[manifest['snapshot_id']],result_ids=['fixture-run'],include_user_state=True)
+    task_file=tmp_path/'backup/user-state/tasks.json'
+    value=json.loads(task_file.read_text());value['records'][0]['result_id']='not-in-backup'
+    task_file.write_text(json.dumps(value))
+    path=tmp_path/'backup/backup-manifest.json'
+    payload=json.loads(path.read_text());payload.pop('checksum')
+    payload['files']['user-state/tasks.json']=file_hash(task_file)
+    payload['total_bytes']=sum((tmp_path/'backup'/f).stat().st_size for f in payload['files'])
+    path.write_text(json.dumps({**payload,'checksum':identity_hash(payload)}))
+    with pytest.raises(ValueError,match='引用'):
+        restore_backup(tmp_path/'backup',tmp_path/'restored')
+    assert not (tmp_path/'restored').exists()

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import copy
+from contextlib import contextmanager
 import json
 import os
 from pathlib import Path
@@ -55,8 +56,14 @@ class TaskJournal:
                 if name not in columns:
                     db.execute(f'ALTER TABLE tasks ADD COLUMN {name} TEXT')
 
+    @contextmanager
     def _connect(self):
-        return sqlite3.connect(self.path, timeout=10)
+        db=sqlite3.connect(self.path,timeout=10)
+        try:
+            with db:
+                yield db
+        finally:
+            db.close()
 
     def begin(self, task_id, key_id, *, pid=None):
         with self._connect() as db:

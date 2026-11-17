@@ -81,6 +81,27 @@ def test_journal_recovers_dead_worker_as_interrupted_not_success(tmp_path):
     assert 'answer' not in str(journal.records())
 
 
+def test_journal_connections_close_after_success_and_rollback(tmp_path):
+    import sqlite3
+    path=tmp_path/'tasks.sqlite'
+    journal=TaskJournal(path)
+    journal.begin('one','key')
+    with journal._connect() as closed:
+        assert closed.execute('SELECT count(*) FROM tasks').fetchone()==(1,)
+    with pytest.raises(sqlite3.ProgrammingError,match='closed'):
+        closed.execute('SELECT 1')
+    with pytest.raises(RuntimeError):
+        with journal._connect() as rolled_back:
+            rolled_back.execute("DELETE FROM tasks")
+            raise RuntimeError('rollback')
+    assert len(journal.records())==1
+    with pytest.raises(sqlite3.ProgrammingError,match='closed'):
+        rolled_back.execute('SELECT 1')
+    moved=path.with_name('moved.sqlite')
+    path.rename(moved)
+    moved.unlink()
+
+
 def test_journal_write_failure_does_not_commit_or_leave_running(tmp_path):
     journal = TaskJournal(tmp_path / 'tasks.sqlite')
     def fail_write(*args):

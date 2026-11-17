@@ -84,14 +84,18 @@ def _validate_payload(root,payload):
         manifest=results._manifest(identifier,indexed=False)
         results._decode(manifest,results.root/'runs'/identifier)
     _observations(root,payload.get('observation_ids',{}),indexed=False)
+    from .backup_user_state import restore_user_state
+    restore_user_state(root,payload)
     return market,results
 
 
-def create_backup(root,target,*,snapshot_ids,result_ids,observation_ids=None,max_bytes=2_000_000_000):
+def create_backup(root,target,*,snapshot_ids,result_ids,observation_ids=None,include_user_state=False,max_bytes=2_000_000_000):
     root,target=_destination(root,target)
+    if type(include_user_state) is not bool:
+        raise ValueError('用户状态选择须为布尔值')
     observation_ids={} if observation_ids is None else observation_ids
     if not isinstance(observation_ids,dict): raise ValueError('观察批次选择无效')
-    if type(max_bytes) is not int or max_bytes<=0 or not snapshot_ids and not result_ids and not any(observation_ids.values()):
+    if type(max_bytes) is not int or max_bytes<=0 or not snapshot_ids and not result_ids and not any(observation_ids.values()) and not include_user_state:
         raise ValueError('需要选择备份内容并设置正容量预算')
     if len(snapshot_ids)!=len(set(snapshot_ids)) or len(result_ids)!=len(set(result_ids)):
         raise ValueError('备份身份重复')
@@ -99,6 +103,10 @@ def create_backup(root,target,*,snapshot_ids,result_ids,observation_ids=None,max
     results=ResultStore(root/'research_results')
     files=set()
     observations=_observations(root,observation_ids,indexed=True)
+    user_files={};user_summary=None
+    if include_user_state:
+        from .backup_user_state import export_user_state
+        user_files,user_summary=export_user_state(root,snapshot_ids,result_ids)
     for service,store in observations.items():
         for identifier in observation_ids[service]:
             for name in ('manifest.json','raw.parquet','normalized.parquet'):
@@ -119,7 +127,8 @@ def create_backup(root,target,*,snapshot_ids,result_ids,observation_ids=None,max
             if not re.fullmatch(r'array-\d{4,}\.parquet',name):
                 raise ValueError('结果文件名无效')
             files.add(f'research_results/runs/{identifier}/{name}')
-    total=sum(_file(root,name).stat().st_size for name in files)
+    user_bytes={n:json.dumps(v,ensure_ascii=False,sort_keys=True).encode('utf-8') for n,v in user_files.items()}
+    total=sum(_file(root,name).stat().st_size for name in files)+sum(map(len,user_bytes.values()))
     if total>max_bytes: raise ValueError('备份超过容量预算')
     with tempfile.TemporaryDirectory(prefix='.backup-',dir=target.parent) as temp:
         staging=Path(temp)/'bundle'
@@ -134,9 +143,15 @@ def create_backup(root,target,*,snapshot_ids,result_ids,observation_ids=None,max
             if before!=file_hash(destination) or before!=file_hash(source):
                 raise ValueError('备份过程中源文件发生变化')
             hashes[name]=before
+        for name,content in user_bytes.items():
+            destination=_file(staging,name)
+            destination.parent.mkdir(parents=True,exist_ok=True)
+            destination.write_bytes(content)
+            hashes[name]=file_hash(destination)
         payload=dict(schema='private-research-backup.v1',disclosure='private_local',
             snapshot_ids=list(snapshot_ids),result_ids=list(result_ids),files=hashes,total_bytes=total,
             observation_ids=observation_ids,scope='selected_immutable_snapshots_results_and_observations',credentials='excluded')
+        if user_summary is not None:payload['user_state']=user_summary
         _validate_payload(staging,payload)
         # Validation creates disposable indexes; rebuild only on restore.
         for name in ('market_service/updates.sqlite3','market_service/snapshots.sqlite3','research_results/results.sqlite3'):
@@ -144,6 +159,7 @@ def create_backup(root,target,*,snapshot_ids,result_ids,observation_ids=None,max
         for service in observations:
             for name in ('updates.sqlite3',service+'.sqlite3'):
                 _file(staging,f'{service}_service/{name}').unlink(missing_ok=True)
+        _file(staging,'workbench_tasks/tasks.sqlite').unlink(missing_ok=True)
         _atomic_write_json(staging/'backup-manifest.json',{**payload,'checksum':identity_hash(payload)})
         os.rename(staging,target)
     return payload
@@ -161,9 +177,11 @@ def restore_backup(source,target,*,max_bytes=2_000_000_000):
     total=0
     for name,digest in payload['files'].items():
         path=_file(source,name)
-        if not name.startswith(('market_service/snapshots/snapshot-','market_service/batches/batch-',
+        allowed_user=(payload.get('user_state') and (name in {'watchlist.json','user-state/tasks.json'}
+            or re.fullmatch(r'screening/screens/saved-screen-[a-f0-9]{64}\.json',name)))
+        if (not allowed_user and not name.startswith(('market_service/snapshots/snapshot-','market_service/batches/batch-',
                                 'research_results/runs/','financial_service/batches/batch-',
-                                'etf_service/batches/batch-','convertible_service/batches/batch-')) or file_hash(path)!=digest:
+                                'etf_service/batches/batch-','convertible_service/batches/batch-'))) or file_hash(path)!=digest:
             raise ValueError('备份文件缺失或校验失败')
         total+=path.stat().st_size
     if total!=payload['total_bytes'] or total>max_bytes:
@@ -207,6 +225,7 @@ def main():
     create.add_argument('--target',required=True)
     create.add_argument('--snapshot',action='append',default=[])
     create.add_argument('--result',action='append',default=[])
+    create.add_argument('--include-user-state',action='store_true',help='包含自选、筛选和任务历史；筛选所引用快照须一同选择')
     for service in ('financial','etf','convertible'):
         create.add_argument('--'+service,action='append',default=[])
     restore=commands.add_parser('restore')
@@ -215,7 +234,8 @@ def main():
     args=parser.parse_args()
     if args.operation=='create':
         selected={s:getattr(args,s) for s in ('financial','etf','convertible') if getattr(args,s)}
-        value=create_backup(args.root,args.target,snapshot_ids=args.snapshot,result_ids=args.result,observation_ids=selected)
+        value=create_backup(args.root,args.target,snapshot_ids=args.snapshot,result_ids=args.result,observation_ids=selected,
+            include_user_state=args.include_user_state)
         report=dict(status='backed_up',snapshots=len(value['snapshot_ids']),results=len(value['result_ids']),
             observations=sum(map(len,selected.values())),bytes=value['total_bytes'],disclosure=value['disclosure'])
     else:
