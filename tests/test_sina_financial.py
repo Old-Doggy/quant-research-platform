@@ -109,3 +109,37 @@ def test_observed_report_conversions_need_exact_periods_and_do_not_difference_as
     assert ttm.loc[ttm.period.eq('2025-06-30') & ttm.field.eq('revenue'),'value'].iloc[0]==120.
     assert pd.isna(ttm.loc[ttm.period.eq('2025-03-31'),'value'].iloc[0])
     assert ttm.loc[ttm.period.eq('2025-06-30') & ttm.field.eq('revenue'),'input_count'].iloc[0]==3
+
+
+def test_financial_chart_preserves_missing_quarters_and_uses_stock_flow_units():
+    from portfolio_app.financial_view import statement_chart
+    rows=[]
+    for field,endpoint,label,values in [('revenue','income','营业收入',[1e8,None,3e8]),
+        ('total_assets','balancesheet','总资产',[10e8,None,12e8])]:
+        for period,value in zip(['2024-12-31','2025-03-31','2025-06-30'],values):
+            rows.append(dict(field=field,endpoint=endpoint,label=label,period=period,value=value,
+                ann_date='2025-08-01',fetched_at='2026-11-17T12:00:00+08:00',basis='期末值' if field=='total_assets' else '单季度'))
+    data=pd.DataFrame(rows);before=data.copy(deep=True)
+    fig=statement_chart(data,metric='overview',basis='单季度',revision='same-observation')
+    pd.testing.assert_frame_equal(data,before)
+    assert len(fig.data)==4
+    assert list(fig.data[0].x)==['2024-12-31','2025-03-31','2025-06-30']
+    assert pd.isna(fig.data[0].y[1])
+    assert fig.data[-1].type=='scatter' and fig.data[-1].connectgaps is False
+    assert fig.data[-1].y[0]==10 and fig.data[-1].y[-1]==12
+    assert '期末值' in fig.data[-1].name
+    assert fig.layout.uirevision=='same-observation-overview-单季度'
+    assert sum('暂无数值' in a.text for a in fig.layout.annotations)==2
+
+
+def test_financial_single_metric_and_empty_period_are_clear(tmp_path,monkeypatch):
+    from portfolio_app.financial_store import FinancialStore
+    from streamlit.testing.v1 import AppTest
+    monkeypatch.setenv('PORTFOLIO_STATE_DIR',str(tmp_path))
+    FinancialStore(tmp_path/'financial_service').ingest(batch())
+    app=AppTest.from_string('from portfolio_app.financial_view import render_financial_data\nrender_financial_data()').run()
+    app.selectbox(key='financial_metric').set_value('revenue').run()
+    assert not app.exception and len(app.get('plotly_chart'))==1
+    app.segmented_control(key='financial_report_range').set_value('仅年报').run()
+    assert not app.exception and not app.get('plotly_chart')
+    assert any('没有对应报告期' in c.value for c in app.caption)

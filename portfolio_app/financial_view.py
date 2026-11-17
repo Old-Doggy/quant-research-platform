@@ -6,7 +6,7 @@ from plotly.subplots import make_subplots
 import streamlit as st
 
 from .financial_store import FinancialStore
-from .research_charts import style_chart, CHART_CONFIG
+from .research_charts import style_chart, CHART_CONFIG, PALETTE
 from .research_diagnostics import show_safe_error
 from .state_paths import state_root
 
@@ -68,18 +68,54 @@ def observed_statements(store, *, symbol, provider):
         'fetched_at','artifact_id','report_version'])
 
 
+def statement_chart(table, *, metric='overview', basis='累计', revision='financial'):
+    """Plot observed flows as bars and balance-sheet stocks as dated levels."""
+    metrics=METRICS if metric=='overview' else [entry for entry in METRICS if entry[1]==metric]
+    if not metrics:
+        raise ValueError('未知财务指标')
+    overview=metric=='overview'
+    titles=[label+' · '+('期末值' if endpoint=='balancesheet' else basis) for endpoint,_,label in metrics]
+    figure=make_subplots(rows=2 if overview else 1,cols=2 if overview else 1,subplot_titles=titles,
+        vertical_spacing=.25,horizontal_spacing=.13)
+    periods=sorted(table.period.unique())
+    for index,(endpoint,field,label) in enumerate(metrics):
+        row,col=(index//2+1,index%2+1) if overview else (1,1)
+        data=table.loc[table.field.eq(field)].set_index('period').reindex(periods)
+        values=pd.to_numeric(data.value,errors='coerce')/1e8
+        common=dict(x=periods,y=values.tolist(),name=titles[index],
+            customdata=data[['ann_date','fetched_at']].fillna('—').values.tolist(),
+            hovertemplate='%{x}<br>'+titles[index]+' %{y:,.3f} 亿元<br>公告 %{customdata[0]}<br>观察 %{customdata[1]}<extra></extra>')
+        if endpoint=='balancesheet':
+            trace=go.Scatter(**common,mode='lines+markers',connectgaps=False,
+                line=dict(color=PALETTE[0],width=2.4),marker=dict(size=6))
+        else:
+            trace=go.Bar(**common,width=.55,marker_color=PALETTE[index%len(PALETTE)])
+        figure.add_trace(trace,row=row,col=col)
+        if not values.notna().any():
+            figure.add_annotation(text='暂无数值',showarrow=False,x=.5,y=.5,
+                xref='x domain',yref='y domain',row=row,col=col,font=dict(size=15,color='#52637B'))
+    style_chart(figure,height=580 if overview else 400,revision=f'{revision}-{metric}-{basis}')
+    figure.update_layout(showlegend=False,hovermode='closest',
+        margin=dict(l=18,r=38,t=65,b=60))
+    figure.update_xaxes(type='category',categoryorder='array',categoryarray=periods,
+        tickangle=-25 if len(periods)>4 else 0,nticks=5,showspikes=False)
+    figure.update_yaxes(title_text='亿元',tickformat=',.1f',rangemode='tozero',zeroline=True)
+    return figure
+
+
 def render_financial_data():
     st.subheader('证券财务')
     st.caption('观察记录 · 查看已抓取的报表，不按旧公告日回填历史研究。')
     store=FinancialStore(state_root()/'financial_service')
     provider=st.selectbox('财务来源',['sina','tushare'],filter_mode=None,key='financial_provider',
         format_func={'sina':'新浪 · 免费三表','tushare':'Tushare · 本机权限'}.get)
-    with st.form('financial_fetch_form'):
-        left,right=st.columns([1,2])
-        symbol=left.text_input('证券代码',value='600000.SH',key='financial_symbol').strip().upper()
-        periods_text=right.text_input('报告期',value='2024-12-31,2025-03-31,2025-06-30,2025-09-30,2025-12-31',
-            help='季度末日期，逗号分隔。最多12个报告期。',key='financial_periods')
-        submit=st.form_submit_button('获取并保存报表',type='primary')
+    with st.expander('获取与更新报表',expanded=False):
+        with st.form('financial_fetch_form'):
+            left,right=st.columns([1,2])
+            symbol=left.text_input('证券代码',value='600000.SH',key='financial_symbol').strip().upper()
+            periods_text=right.text_input('报告期',value='2024-12-31,2025-03-31,2025-06-30,2025-09-30,2025-12-31',
+                help='季度末日期，逗号分隔。最多12个报告期。',key='financial_periods')
+            submit=st.form_submit_button('获取并保存报表',type='primary')
     if submit:
         try:
             periods=[p.strip() for p in periods_text.replace('，',',').split(',') if p.strip()]
@@ -113,28 +149,28 @@ def render_financial_data():
         st.caption('Tushare财务金额单位尚未实测核验，先展示来源值。')
         st.dataframe(table,hide_index=True,width='stretch')
         return
-    period_mode=st.segmented_control('报告范围',['全部季度末','仅年报'],default='全部季度末',key='financial_report_range')
-    basis=st.segmented_control('报表口径',['累计','单季度','TTM'],default='累计',key='financial_basis')
-    display=st.segmented_control('财务展示',['图表','表格'],default='图表',key='financial_display')
+    range_column,basis_column,display_column=st.columns([1.2,1.3,1.])
+    with range_column:
+        period_mode=st.segmented_control('报告范围',['全部季度末','仅年报'],default='全部季度末',key='financial_report_range')
+    with basis_column:
+        basis=st.segmented_control('报表口径',['累计','单季度','TTM'],default='累计',key='financial_basis')
+    with display_column:
+        display=st.segmented_control('财务展示',['图表','表格'],default='图表',key='financial_display')
     table=statement_basis(table,basis)
     shown=table.loc[table.period.str.endswith('12-31')].copy() if period_mode=='仅年报' else table
     if display=='表格':
         st.dataframe(shown.rename(columns=dict(label='指标',period='报告期',value='金额（元）',ann_date='公告日',fetched_at='观察时间')),
             hide_index=True,width='stretch')
     else:
-        figure=make_subplots(rows=2,cols=2,subplot_titles=[label for _,_,label in METRICS],vertical_spacing=.25,horizontal_spacing=.13)
-        for index,(_,field,label) in enumerate(METRICS):
-            data=shown.loc[shown.field.eq(field)]
-            figure.add_trace(go.Bar(x=data.period.tolist(),y=(pd.to_numeric(data.value,errors='coerce')/1e8).tolist(),
-                name=label,marker_color=['#2864D7','#14949B','#617DA5','#596FB2'][index],
-                customdata=data[['ann_date','fetched_at']].values.tolist(),
-                hovertemplate='%{x}<br>%{y:.3f} 亿元<br>公告 %{customdata[0]}<br>观察 %{customdata[1]}<extra></extra>'),
-                row=index//2+1,col=index%2+1)
-        style_chart(figure,height=560)
-        figure.update_layout(showlegend=False)
-        figure.update_xaxes(type='category',tickangle=-25,nticks=5)
-        figure.update_yaxes(title_text='亿元',tickformat=',.1f')
-        st.plotly_chart(figure,width='stretch',config=CHART_CONFIG,key='financial_statements_chart')
+        choices={'overview':'四项概览',**{field:label for _,field,label in METRICS}}
+        metric=st.selectbox('财务指标',list(choices),format_func=choices.get,key='financial_metric',filter_mode=None)
+        if shown.empty:
+            st.caption('当前范围没有对应报告期。可切回全部季度末查看。')
+        else:
+            from hashlib import sha256
+            revision=sha256(shown.to_csv(index=False).encode('utf-8')).hexdigest()[:16]
+            st.plotly_chart(statement_chart(shown,metric=metric,basis=basis,revision=revision),
+                width='stretch',config=CHART_CONFIG,key='financial_statements_chart')
     st.caption(f'收入、利润及现金流：{basis}；总资产为期末值。缺期或缺数留空，转换按当前观察版本计算。')
     st.download_button('下载当前财务数据',shown.to_csv(index=False).encode('utf-8-sig'),
         'financial-observations.csv','text/csv',key='financial_csv')
