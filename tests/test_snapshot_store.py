@@ -31,6 +31,9 @@ def test_publish_and_reopen_retains_inputs_and_old_snapshot_after_new_generation
     assert first['research_capabilities']['price_browsing'] is True
     assert first['research_capabilities']['corporate_action_backtest'] is False
     assert store.read_frame(first['snapshot_id']).close.tolist()==[10.]
+    restored=store.read_frame(first['snapshot_id'])
+    assert restored.attrs['research_dataset']['snapshot_id']==first['snapshot_id']
+    assert restored.attrs['research_dataset']['dataset_generation']==first['generation']
     other=[]
     for artifact in ids:
         b=updates.read_artifact(artifact)

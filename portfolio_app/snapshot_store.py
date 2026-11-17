@@ -170,7 +170,8 @@ class SnapshotStore:
             raise ValueError('快照底层批次缺失或校验失败') from exc
         frame.attrs['snapshot']=manifest['reference']
         frame.attrs['research_dataset']=dict(dataset_id=manifest['dataset_id'],version=snapshot_id,
-            price_basis='raw',source_kind='provider_snapshot')
+            price_basis='raw',source_kind='provider_snapshot',snapshot_id=snapshot_id,
+            dataset_generation=manifest['generation'])
         frame.attrs['research_capabilities']=manifest['research_capabilities']
         frame['pre_close']=source_previous_close(frame,'source_pre_close')
         frame.attrs['previous_close_policy']=PREVIOUS_CLOSE_POLICY
