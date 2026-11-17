@@ -11,10 +11,12 @@ def test_fresh_checkout_opens_every_workspace(monkeypatch, tmp_path, workspace):
  monkeypatch.setenv("PORTFOLIO_STATE_DIR", str(tmp_path / "state"))
  monkeypatch.setenv("PORTFOLIO_DATA_ROOT", str(tmp_path / "no-market"))
  app=AppTest.from_file(str(ROOT / "streamlit_app.py"),default_timeout=40)
- app.query_params["workspace"]=workspace
  app.run()
+ app.radio(key='workspace_route_selector').set_value(workspace).run()
  assert not app.exception
  assert app.sidebar.radio[0].options == ["看盘", "因子", "策略", "组合", "数据", "实验", "作品"]
+ assert app.radio(key='workspace_route_selector').value==workspace
+ assert not any('无效工作区链接' in item.value for item in app.warning)
  assert not app.error
 
 

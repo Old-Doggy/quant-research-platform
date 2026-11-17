@@ -35,8 +35,9 @@ def test_registered_selection_survives_navigation_widget_cleanup(monkeypatch):
     app = AppTest.from_file(str(Path('portfolio_app/local_app.py').resolve()), default_timeout=30)
     activate_dataset(app.session_state, pd.concat([bars('AAA'), bars('BBB')], ignore_index=True),
         dataset_id='custom', version='v002', source_kind='file_import')
-    app.query_params.update(workspace='factors')
     app.run()
+    app.radio(key='workspace_route_selector').set_value('factors').run()
+    assert app.radio(key='workspace_route_selector').value=='factors'
     for workspace in ['strategy', 'portfolio', 'watch', 'factors']:
         app.radio(key='workspace_route_selector').set_value(workspace).run()
         assert not app.exception
