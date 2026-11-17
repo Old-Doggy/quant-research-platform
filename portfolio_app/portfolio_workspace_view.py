@@ -214,6 +214,8 @@ def _render_portfolio_workspace(frame, *, context_id, public_mode):
         report = portfolio_scenarios(frames, recipe=recipe, spec=spec, strategy_key=strategy_key,
             params=params, initial_cash=initial_cash, variants=variants, token=token,external_flows=external_flows)
         result = dict(baseline=baseline, scenarios=report)
+        from .portfolio_capacity import capacity_inputs
+        result['capacity_inputs']=capacity_inputs(frames)
         if not public_mode:
             from .result_replay import portfolio_replay_inputs
             from .research_dataset import dataset_metadata
@@ -283,6 +285,10 @@ def _render_portfolio_workspace(frame, *, context_id, public_mode):
             with holdings:
                 detail=st.segmented_control('持仓与交易明细',['现金与持仓','成交与拒单'],
                     default='现金与持仓',required=True,key='portfolio_holdings_detail')
+        if risk_panel.open:
+            with risk_panel:
+                detail=st.segmented_control('风险明细',['风险与暴露','流动性与容量'],
+                    default='风险与暴露',required=True,key='portfolio_risk_detail')
         if performance.open and detail=='净值与回撤':
             with performance:
                 curve = view["curve"].copy()
@@ -389,7 +395,12 @@ def _render_portfolio_workspace(frame, *, context_id, public_mode):
                         width='stretch', config=CHART_CONFIG, key='portfolio_leg_chart')
                     with st.expander('策略贡献明细'):
                         render_paged_table(legs, key="portfolio_leg_contribution")
-        if risk_panel.open:
+        if risk_panel.open and detail=='流动性与容量':
+            with risk_panel:
+                from .portfolio_capacity_view import render_capacity
+                st.caption(f'{date} · 全组合持仓，不随单只标的筛选变化')
+                render_capacity(result,state.result.get('capacity_inputs'),date=date,revision=f'capacity-{run_id}-{date}')
+        if risk_panel.open and detail=='风险与暴露':
             with risk_panel:
                 risk = view['risk']
                 st.caption(f'截至 {date} · 全组合风险，不随单只标的筛选变化')

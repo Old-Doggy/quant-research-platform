@@ -27,6 +27,9 @@ def test_portfolio_has_four_primary_views_and_only_active_view_draws():
     app.run()
     assert not app.exception and len(app.get('plotly_chart'))==1
     assert any('截至' in c.value for c in app.caption)
+    app.segmented_control(key='portfolio_risk_detail').set_value('流动性与容量').run()
+    assert not app.exception and len(app.get('plotly_chart'))==0
+    assert any('未保存成交额输入' in c.value for c in app.caption)
     app.session_state['portfolio_main_view']='持仓交易'
     app.run()
     assert not app.exception and len(app.get('plotly_chart'))==1
