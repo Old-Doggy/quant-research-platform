@@ -244,7 +244,7 @@ def _render_research_result_view(card: dict[str, object]) -> None:
         )
         st.subheader("实际日净值曲线")
         style_chart(figure, title=figure.layout.title.text or '', height=figure.layout.height or 360)
-        st.plotly_chart(figure, width="stretch", key=f"research-result-curve-{card['model_id']}")
+        st.plotly_chart(figure, width="stretch", key=f"research-result-curve-{card['model_id']}", config=CHART_CONFIG)
         st.caption(f"读取真实日频产物，共 {len(curve_frame):,} 个观测点；净值已归一化，未暴露账户规模。")
     elif curve_status == "not_in_reviewed_bundle":
         st.info("审核公开包没有逐日曲线；这里不从年化指标反推曲线。")
@@ -352,14 +352,14 @@ def render_strategy_showcase_card(card: dict[str, object], *, expanded: bool = F
                 [(title, [layer['metrics'].get(metric) for layer in layers_with_metrics])
                  for metric, title in [('annual_return','年化收益'), ('max_drawdown','最大回撤')]], title='研究情景')
             style_chart(figure, title=figure.layout.title.text or '', height=figure.layout.height or 360)
-            st.plotly_chart(figure, width="stretch", key=f"evidence-scenarios-{card['model_id']}")
+            st.plotly_chart(figure, width="stretch", key=f"evidence-scenarios-{card['model_id']}", config=CHART_CONFIG)
         if card["model_id"] == "model3":
             annual = annual_oos_table(REPO_ROOT)
             st.subheader("年度样本外表现")
             if not annual.empty:
                 figure = build_metric_bars(annual, category='年度', value='年化收益', title='年度样本外收益')
                 style_chart(figure, title=figure.layout.title.text or '', height=figure.layout.height or 360)
-                st.plotly_chart(figure, width="stretch", key="showcase-annual-oos")
+                st.plotly_chart(figure, width="stretch", key="showcase-annual-oos", config=CHART_CONFIG)
                 display = annual.copy()
                 display["年化收益"] = display["年化收益"].map(lambda value: f"{value:.2%}")
                 st.dataframe(display, width="stretch", hide_index=True)
@@ -1191,7 +1191,7 @@ def render_model_evidence(evidence: dict[str, object]) -> None:
         if "year" in annual_frame and "annualized_return" in annual_frame:
             chart = build_metric_bars(annual_frame, category='year', value='annualized_return', title='年度样本外年化收益')
             style_chart(chart, title=chart.layout.title.text or '', height=chart.layout.height or 360)
-            st.plotly_chart(chart, width="stretch")
+            st.plotly_chart(chart, width="stretch", config=CHART_CONFIG)
 
 
 def model_comparison_frame(rows: list[dict[str, object]]) -> pd.DataFrame:
@@ -1244,7 +1244,7 @@ def render_portfolio_home() -> None:
     st.dataframe(pd.DataFrame({str(content["capability_columns"][0]): list(content["capabilities"])}), width="stretch", hide_index=True)
     st.subheader(str(content["projects_heading"]))
     st.caption(str(content["comparison_note"]))
-    st.plotly_chart(build_model_metric_chart(rows), width="stretch")
+    st.plotly_chart(build_model_metric_chart(rows), width="stretch", config=CHART_CONFIG)
 
     overview = model_comparison_frame(rows)
     st.dataframe(
@@ -1297,7 +1297,7 @@ def render_model_comparison() -> None:
         st.info("当前筛选没有可展示的研究证据。")
         return
 
-    st.plotly_chart(build_model_metric_chart(filtered_rows), width="stretch")
+    st.plotly_chart(build_model_metric_chart(filtered_rows), width="stretch", config=CHART_CONFIG)
     st.dataframe(
         table[["model", "category", "asset_scope", "status_label", "period", "annual_return_display", "sharpe_display", "max_drawdown_display", "source"]].rename(
             columns={
@@ -1452,7 +1452,7 @@ def render_data_analysis() -> None:
         if not returns.empty:
             chart = build_metric_bars(returns, category='symbol', value='total_return', title='各股票区间收益')
             style_chart(chart, title=chart.layout.title.text or '', height=chart.layout.height or 360)
-            st.plotly_chart(chart, width="stretch")
+            st.plotly_chart(chart, width="stretch", config=CHART_CONFIG)
 
     with quality_tab:
         if quality["status"] == "通过":

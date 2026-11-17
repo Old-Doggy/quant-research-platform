@@ -422,7 +422,7 @@ def _render_watch_workspace_body(route_state: Any, *, app_globals: Mapping[str, 
                 old_metrics = previous['portfolio_result'].diagnostics['metrics']
             st.caption('上次研究摘要与原始结果曲线；当前配置仍为草案。')
             st.metric('上次策略区间收益', format_metric(old_metrics['total_return'], True))
-            st.plotly_chart(build_equity_chart(old_frame, '上次成功结果'), width='stretch', key='dashboard_previous_curve')
+            st.plotly_chart(build_equity_chart(old_frame, '上次成功结果'), width='stretch', key='dashboard_previous_curve', config=CHART_CONFIG)
             render_paged_table(old_frame, key='dashboard_previous_detail')
             return
         if analysis_mode == "单股":
@@ -521,12 +521,14 @@ def _render_watch_workspace_body(route_state: Any, *, app_globals: Mapping[str, 
                     build_equity_chart(portfolio_frame, "等权组合净值与基准对比"),
                     width="stretch",
                     key=build_equity_chart_key("portfolio-overview"),
+                    config=CHART_CONFIG,
                 )
             with overview_right:
                 st.plotly_chart(
                     build_drawdown_chart(portfolio_frame, "组合策略回撤"),
                     width="stretch",
                     key="portfolio-overview-drawdown",
+                    config=CHART_CONFIG,
                 )
             exposure_columns = st.columns(3)
             exposure_columns[0].metric("当前股票暴露", format_metric(float(portfolio_frame["gross_exposure"].iloc[-1]), True))
@@ -536,6 +538,7 @@ def _render_watch_workspace_body(route_state: Any, *, app_globals: Mapping[str, 
                 build_portfolio_exposure_chart(portfolio_frame),
                 width="stretch",
                 key="portfolio-overview-exposure",
+                config=CHART_CONFIG,
             )
             display_frame = portfolio_frame.tail(30).copy()
             display_frame.attrs = {}
@@ -603,12 +606,14 @@ def _render_watch_workspace_body(route_state: Any, *, app_globals: Mapping[str, 
                 build_equity_chart(portfolio_frame, "组合策略净值与基准对比"),
                 width="stretch",
                 key=build_equity_chart_key("portfolio-strategy"),
+                config=CHART_CONFIG,
             )
             st.caption("各标的使用固定资金权重；无持仓信号的资金保留现金。组合成本按各标的权重与换手扣除，不是动态再平衡的真实账户。")
             st.plotly_chart(
                 build_portfolio_contribution_chart(portfolio_contribution_frame),
                 width="stretch",
                 key="portfolio-strategy-contribution",
+                config=CHART_CONFIG,
             )
             st.subheader("逐股票表现")
             st.dataframe(symbol_comparison, width="stretch", hide_index=True)
@@ -785,7 +790,7 @@ def _render_watch_workspace_body(route_state: Any, *, app_globals: Mapping[str, 
             summary_columns[4].metric("成本敏感度", format_metric(float(robustness_summary["cost_sensitivity"]), True))
             summary_columns[5].metric("稳定性标签", str(robustness_summary["stability_label"]))
 
-            st.plotly_chart(build_robustness_chart(robustness_report), width="stretch", key="robustness-scenarios")
+            st.plotly_chart(build_robustness_chart(robustness_report), width="stretch", key="robustness-scenarios", config=CHART_CONFIG)
             report_table = robustness_report.rename(
                 columns={
                     "strategy_name": "策略",
@@ -811,6 +816,7 @@ def _render_watch_workspace_body(route_state: Any, *, app_globals: Mapping[str, 
                 build_strategy_comparison_chart(strategy_comparison),
                 width="stretch",
                 key="strategy-comparison-report",
+                config=CHART_CONFIG,
             )
             comparison_table = strategy_comparison.rename(
                 columns={
