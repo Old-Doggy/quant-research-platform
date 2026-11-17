@@ -268,168 +268,179 @@ def _render_portfolio_workspace(frame, *, context_id, public_mode):
         symbol = None if selected == "全部标的" else selected
         st.session_state["portfolio_selection"] = dict(run_id=run_id, date=date, symbol=symbol)
         view = portfolio_drilldown(result, date=date, symbol=symbol)
-        nav_tab, cash_tab, orders_tab, contribution_tab, leg_tab, risk_tab, robust, archive_tab = st.tabs([
-            "净值与回撤", "现金与持仓", "成交与拒单", "个股贡献", "策略腿贡献", "风险与暴露", "稳健性", "研究归档"
-        ])
-        with nav_tab:
-            curve = view["curve"].copy()
-            if 'unit_nav' not in curve:
-                curve["unit_nav"] = curve.nav / result.config['initial_cash']
-            curve["drawdown"] = curve.unit_nav / curve.unit_nav.cummax().clip(lower=1.) - 1
-            curve = envelope_sample(curve, value='nav')
-            def select_chart_date():
-                from .chart_events import accept_chart_event, plotly_date_event
-                event = st.session_state.get("portfolio_nav", {})
-                previous = st.session_state.get('_portfolio_chart_event', {})
-                sequence = previous.get('sequence', 0) if previous.get('chart_id') == run_id else 0
-                selected_event = plotly_date_event(event, chart_id=run_id, symbol='portfolio', sequence=sequence + 1)
-                accepted = accept_chart_event(selected_event, chart_id=run_id, symbol='portfolio', dates=set(dates), last_sequence=sequence)
-                if accepted:
-                    st.session_state['_portfolio_chart_event'] = accepted
-                    st.session_state["portfolio_date"] = accepted['date']
-            fig = build_performance_chart(curve, nav='unit_nav', label='账户净值',
-                title='账户净值与回撤', revision=f'portfolio-{run_id}')
-            # Plotly emits point-selection events only for marker-enabled traces.
-            # Keep the curve clean while retaining a seven-pixel click target.
-            fig.data[0].update(mode='lines+markers', marker=dict(size=7, opacity=0))
-            fig.update_layout(clickmode='event+select')
-            st.plotly_chart(fig, width="stretch", key="portfolio_nav", on_select=select_chart_date,
-                selection_mode="points", config=CHART_CONFIG)
-            st.caption(f"研究日期 {date} · 点击曲线定位持仓日期")
-        with cash_tab:
-            row = view["ledger"].iloc[0]
-            a, b, c, d = st.columns(4)
-            a.metric("当日现金", f"{row.cash:,.2f}")
-            b.metric("股票市值", f"{row.positions_value:,.2f}")
-            c.metric("现金权重", f"{row.cash_weight:.1%}")
-            d.metric("股票暴露", f"{row.gross_exposure:.1%}")
-            if row.get('receivables', 0.):
-                st.caption(f"应收股息 {row.receivables:,.2f} · 已计入净值，到账后转为可用现金 · 税前")
-            def _explain_256():
-                st.caption(f"资金差额 {row.reconciliation_delta:.8f} · 贡献对账 {summary['reconciliation']}")
-            help_link('账户对账', _explain_256, key='portfolio_workspace_view_help_256')
-            st.subheader(f"{date} · {selected} · 实际持仓")
-            if symbol is None and row.nav > 0:
-                st.plotly_chart(build_allocation_chart(view['positions'], cash=float(row.cash), nav=float(row.nav),
-                    receivables=float(row.get('receivables', 0.)),
-                    revision=f'allocation-{run_id}-{date}'), width='stretch', config=CHART_CONFIG,
-                    key='portfolio_allocation_chart')
-            positions = view["positions"].rename(columns={"trade_date": "日期", "symbol": "标的", "quantity": "股数",
-                "sellable_quantity": "已上市股数",
-                "valuation_status": "估值状态",
-                "market_value": "市值", "close": "收盘价"})
-            if positions.empty:
-                st.info("当前筛选无持仓")
-            else:
-                with st.expander('持仓明细'):
-                    render_paged_table(positions, key="portfolio_positions")
-        with orders_tab:
-            st.subheader(f"{date} · {selected} · 成交与拒单")
-            orders = pd.DataFrame(view["orders"])
-            if orders.empty:
-                st.info("当前筛选无订单")
-                st.caption("空订单不是异常，表示当日没有满足条件的调仓或没有可执行成交。")
-            else:
-                orders = orders[["symbol", "side", "effective_date", "requested_quantity", "filled_quantity",
-                    "remaining_quantity", "status", "reason"]].rename(columns={"symbol": "标的", "side": "方向",
-                    "effective_date": "执行日期", "requested_quantity": "申请股数", "filled_quantity": "成交股数",
-                    "remaining_quantity": "剩余股数", "status": "状态", "reason": "原因"})
-                render_paged_table(orders, key="portfolio_orders")
-            st.caption("成交价格、现金变化和拒单原因来自同一条离线订单链；空交易不会被当作失败。")
-        with contribution_tab:
-            from .portfolio_contribution import contribution_period
-            scope=st.segmented_control('贡献期间',['当日','截至所选日'],default='当日',key='portfolio_contribution_period')
-            ledger=result.accounting.ledger
-            first=ledger.trade_date.iloc[0] if scope=='截至所选日' else date
-            required={'price_pnl','dividend_pnl','contribution_residual_pnl'}
-            if required<=set(ledger):
-                report=contribution_period(ledger,initial_cash=result.config['initial_cash'],start=first,end=date)
-                components=report['components']
-                st.plotly_chart(build_metric_bars(components,category='label',value='contribution',
-                    title='组合收益分解',revision=f'account-contribution-{run_id}-{date}-{scope}'),
-                    width='stretch',config=CHART_CONFIG,key='portfolio_account_contribution')
-                st.caption(f"组合收益 {report['total_return']:.2%} · 分项合计 {components.contribution.sum():.2%}")
-                st.download_button('下载收益分解',components.to_csv(index=False).encode('utf-8-sig'),
-                    'portfolio-contribution.csv','text/csv',key='portfolio_components_csv')
-            else:
-                st.caption('此历史批次未保存分项账本，可查看原证券贡献。')
-            st.subheader(f"{date} · {selected} · 个股贡献")
-            contribution = view["contribution"].rename(columns={"trade_date": "日期", "symbol": "标的",
-                "contribution": "日收益贡献", "pnl": "毛损益", "kind": "贡献类型"})
-            if contribution.empty:
-                st.info("当前筛选无收益贡献变化")
-            else:
-                st.plotly_chart(build_metric_bars(contribution, category='标的', value='日收益贡献',
-                    title='当日个股毛收益贡献', revision=f'contribution-{run_id}-{date}'),
-                    width='stretch', config=CHART_CONFIG, key='portfolio_contribution_chart')
-                with st.expander('贡献明细'):
-                    render_paged_table(contribution, key="portfolio_contribution")
-            st.caption("毛收益贡献 · 费用与现金见账本")
-            with st.expander("当日完整账本与事件编号"):
-                render_paged_table(view["ledger"], key="portfolio_raw_ledger")
-                render_paged_table(pd.DataFrame(view["orders"]), key="portfolio_raw_orders")
-        with leg_tab:
-            st.subheader(f"{date} · {selected} · 策略腿贡献")
-            legs = view["leg_contribution"].rename(columns={
-                "trade_date": "日期", "leg": "策略腿", "pnl": "毛损益", "contribution": "日收益贡献"
-            })
-            if legs.empty:
-                st.info("当前筛选无策略腿贡献变化")
-            else:
-                st.plotly_chart(build_metric_bars(legs, category='策略腿', value='日收益贡献',
-                    title='当日策略腿毛收益贡献', revision=f'legs-{run_id}-{date}'),
-                    width='stretch', config=CHART_CONFIG, key='portfolio_leg_chart')
-                with st.expander('策略贡献明细'):
-                    render_paged_table(legs, key="portfolio_leg_contribution")
-        with risk_tab:
-            risk = view['risk']
-            st.caption(f'截至 {date} · 全组合风险，不随单只标的筛选变化')
-            for column, label, key, percent in zip(st.columns(4),
-                ['年化波动', '夏普比率', 'Sortino', '股票集中度'],
-                ['annual_volatility', 'sharpe', 'sortino', 'concentration_hhi'],
-                [True, False, False, False]):
-                value = _finite_float(risk.get(key))
-                column.metric(label, '—' if value is None else f'{value:.2%}' if percent else f'{value:.2f}')
-            def _explain_320():
-                st.write(f"波动按{risk['annualization_sessions']}个交易日年化。夏普和Sortino衡量单位风险收益；集中度HHI越接近1，持仓越集中。")
-                st.caption(f"有效样本 {risk.get('observations', '—')} · 状态 {risk.get('status', '—')}")
-            help_link('风险指标说明', _explain_320, key='portfolio_workspace_view_help_320')
-            exposure = view["curve"][["trade_date", "cash_weight", "gross_exposure", "net_exposure"]].copy()
-            exposure = envelope_sample(exposure, value="gross_exposure")
-            exposure_fig = build_time_series_chart(exposure,
-                {'cash_weight':'现金比例', 'gross_exposure':'股票暴露'}, title='现金与股票暴露',
-                revision=f'exposure-{run_id}-{date}')
-            if (pd.Timestamp(exposure.trade_date.max())-pd.Timestamp(exposure.trade_date.min())).days<90:
-                exposure_fig.update_xaxes(tickformat='%m-%d',nticks=6)
-            st.plotly_chart(exposure_fig, width='stretch', key='portfolio_exposure', config=CHART_CONFIG)
-            exposure_row=view['ledger'].iloc[0]
-            st.caption(f"{date} 股票暴露 {exposure_row.gross_exposure:.2%} · 现金权重 {exposure_row.cash_weight:.2%}")
-        with robust:
-            st.caption("每个场景只改变一个假设；结果按预设顺序展示，失败和缺数据场景不计算比较差值。")
-            report = state.result["scenarios"].drop(columns=["config", "data_sha256"], errors="ignore")
-            if not report.empty and {'scenario_id', 'total_return'}.issubset(report.columns):
-                st.plotly_chart(build_metric_bars(report, category='scenario_id', value='total_return',
-                    title='预设场景 · 区间收益', revision=f'scenarios-{run_id}'),
-                    width='stretch', config=CHART_CONFIG, key='portfolio_scenario_chart')
-            st.dataframe(report.rename(columns={"scenario_id": "场景", "changed_assumption": "变化假设",
-                "comparable": "可比较", "status": "状态", "total_return": "区间收益",
-                "max_drawdown": "最大回撤", "total_cost": "费用", "delta_total_return": "相对基准收益差",
-                "delta_max_drawdown": "相对基准回撤差", "delta_total_cost": "相对基准费用差"}),
-                width="stretch", hide_index=True)
-        with archive_tab:
-            register_run(run_id=run_id, label='统一账户组合', manifest=result.inputs['run_manifest'],
-                         metrics=metrics, public_mode=public_mode)
-            render_run_audit(result.inputs['run_manifest'], integrity={'status': 'UNVERIFIED'},
-                             public_mode=public_mode, key='portfolio_run_audit')
-            st.caption("公开摘要仅保留汇总指标。完整归档保留配置、订单和持仓，仅供本地研究。")
-            summary = create_portfolio_archive(result, mode="public_redacted")
-            st.download_button("下载公开组合摘要", json.dumps(summary, ensure_ascii=False, indent=2),
-                "portfolio-summary.json", mime="application/json", key="portfolio_public_archive")
-            if not public_mode:
-                local = prepared_download(key='_portfolio_archive_bytes', identity=run_id,
-                    build=lambda: json.dumps(create_portfolio_archive(result, mode="private_local"), ensure_ascii=False, indent=2))
-                st.download_button("下载本地完整组合归档", local,
-                    "portfolio-local.json", mime="application/json", key="portfolio_private_archive")
+        performance,attribution,holdings,risk_panel=st.tabs(
+            ['净值表现','收益归因','持仓交易','风险分析'],key='portfolio_main_view',on_change='rerun')
+        detail=None
+        if performance.open:
+            with performance:
+                detail=st.segmented_control('表现明细',['净值与回撤','稳健性','研究归档'],
+                    default='净值与回撤',required=True,key='portfolio_performance_detail')
+        if attribution.open:
+            with attribution:
+                detail=st.segmented_control('归因明细',['收益分解','策略贡献'],default='收益分解',
+                    required=True,key='portfolio_attribution_detail')
+        if holdings.open:
+            with holdings:
+                detail=st.segmented_control('持仓与交易明细',['现金与持仓','成交与拒单'],
+                    default='现金与持仓',required=True,key='portfolio_holdings_detail')
+        if performance.open and detail=='净值与回撤':
+            with performance:
+                curve = view["curve"].copy()
+                if 'unit_nav' not in curve:
+                    curve["unit_nav"] = curve.nav / result.config['initial_cash']
+                curve["drawdown"] = curve.unit_nav / curve.unit_nav.cummax().clip(lower=1.) - 1
+                curve = envelope_sample(curve, value='nav')
+                def select_chart_date():
+                    from .chart_events import accept_chart_event, plotly_date_event
+                    event = st.session_state.get("portfolio_nav", {})
+                    previous = st.session_state.get('_portfolio_chart_event', {})
+                    sequence = previous.get('sequence', 0) if previous.get('chart_id') == run_id else 0
+                    selected_event = plotly_date_event(event, chart_id=run_id, symbol='portfolio', sequence=sequence + 1)
+                    accepted = accept_chart_event(selected_event, chart_id=run_id, symbol='portfolio', dates=set(dates), last_sequence=sequence)
+                    if accepted:
+                        st.session_state['_portfolio_chart_event'] = accepted
+                        st.session_state["portfolio_date"] = accepted['date']
+                fig = build_performance_chart(curve, nav='unit_nav', label='账户净值',
+                    title='账户净值与回撤', revision=f'portfolio-{run_id}')
+                # Plotly emits point-selection events only for marker-enabled traces.
+                # Keep the curve clean while retaining a seven-pixel click target.
+                fig.data[0].update(mode='lines+markers', marker=dict(size=7, opacity=0))
+                fig.update_layout(clickmode='event+select')
+                st.plotly_chart(fig, width="stretch", key="portfolio_nav", on_select=select_chart_date,
+                    selection_mode="points", config=CHART_CONFIG)
+                st.caption(f"研究日期 {date} · 点击曲线定位持仓日期")
+        if holdings.open and detail=='现金与持仓':
+            with holdings:
+                row = view["ledger"].iloc[0]
+                a, b, c, d = st.columns(4)
+                a.metric("当日现金", f"{row.cash:,.2f}")
+                b.metric("股票市值", f"{row.positions_value:,.2f}")
+                c.metric("现金权重", f"{row.cash_weight:.1%}")
+                d.metric("股票暴露", f"{row.gross_exposure:.1%}")
+                if row.get('receivables', 0.):
+                    st.caption(f"应收股息 {row.receivables:,.2f} · 已计入净值，到账后转为可用现金 · 税前")
+                def _explain_256():
+                    st.caption(f"资金差额 {row.reconciliation_delta:.8f} · 贡献对账 {summary['reconciliation']}")
+                help_link('账户对账', _explain_256, key='portfolio_workspace_view_help_256')
+                st.subheader(f"{date} · {selected} · 实际持仓")
+                if symbol is None and row.nav > 0:
+                    st.plotly_chart(build_allocation_chart(view['positions'], cash=float(row.cash), nav=float(row.nav),
+                        receivables=float(row.get('receivables', 0.)),
+                        revision=f'allocation-{run_id}-{date}'), width='stretch', config=CHART_CONFIG,
+                        key='portfolio_allocation_chart')
+                positions = view["positions"].rename(columns={"trade_date": "日期", "symbol": "标的", "quantity": "股数",
+                    "sellable_quantity": "已上市股数",
+                    "valuation_status": "估值状态",
+                    "market_value": "市值", "close": "收盘价"})
+                if positions.empty:
+                    st.info("当前筛选无持仓")
+                else:
+                    with st.expander('持仓明细'):
+                        render_paged_table(positions, key="portfolio_positions")
+        if holdings.open and detail=='成交与拒单':
+            with holdings:
+                st.subheader(f"{date} · {selected} · 成交与拒单")
+                from .portfolio_order_view import render_orders
+                render_orders(pd.DataFrame(view['orders']),revision=f'{run_id}-{date}-{selected}')
+        if attribution.open and detail=='收益分解':
+            with attribution:
+                from .portfolio_contribution import contribution_period
+                scope=st.segmented_control('贡献期间',['当日','截至所选日'],default='当日',key='portfolio_contribution_period')
+                ledger=result.accounting.ledger
+                first=ledger.trade_date.iloc[0] if scope=='截至所选日' else date
+                required={'price_pnl','dividend_pnl','contribution_residual_pnl'}
+                if required<=set(ledger):
+                    report=contribution_period(ledger,initial_cash=result.config['initial_cash'],start=first,end=date)
+                    components=report['components']
+                    st.plotly_chart(build_metric_bars(components,category='label',value='contribution',
+                        title='组合收益分解',revision=f'account-contribution-{run_id}-{date}-{scope}'),
+                        width='stretch',config=CHART_CONFIG,key='portfolio_account_contribution')
+                    st.caption(f"组合收益 {report['total_return']:.2%} · 分项合计 {components.contribution.sum():.2%}")
+                    st.download_button('下载收益分解',components.to_csv(index=False).encode('utf-8-sig'),
+                        'portfolio-contribution.csv','text/csv',key='portfolio_components_csv')
+                else:
+                    st.caption('此历史批次未保存分项账本，可查看原证券贡献。')
+                st.subheader(f"{date} · {selected} · 个股贡献")
+                contribution = view["contribution"].rename(columns={"trade_date": "日期", "symbol": "标的",
+                    "contribution": "日收益贡献", "pnl": "毛损益", "kind": "贡献类型"})
+                if contribution.empty:
+                    st.info("当前筛选无收益贡献变化")
+                else:
+                    st.plotly_chart(build_metric_bars(contribution, category='标的', value='日收益贡献',
+                        title='当日个股毛收益贡献', revision=f'contribution-{run_id}-{date}'),
+                        width='stretch', config=CHART_CONFIG, key='portfolio_contribution_chart')
+                    with st.expander('贡献明细'):
+                        render_paged_table(contribution, key="portfolio_contribution")
+                st.caption("毛收益贡献 · 费用与现金见账本")
+                with st.expander("当日完整账本与事件编号"):
+                    render_paged_table(view["ledger"], key="portfolio_raw_ledger")
+                    render_paged_table(pd.DataFrame(view["orders"]), key="portfolio_raw_orders")
+        if attribution.open and detail=='策略贡献':
+            with attribution:
+                st.subheader(f"{date} · {selected} · 策略腿贡献")
+                legs = view["leg_contribution"].rename(columns={
+                    "trade_date": "日期", "leg": "策略腿", "pnl": "毛损益", "contribution": "日收益贡献"
+                })
+                if legs.empty:
+                    st.info("当前筛选无策略腿贡献变化")
+                else:
+                    st.plotly_chart(build_metric_bars(legs, category='策略腿', value='日收益贡献',
+                        title='当日策略腿毛收益贡献', revision=f'legs-{run_id}-{date}'),
+                        width='stretch', config=CHART_CONFIG, key='portfolio_leg_chart')
+                    with st.expander('策略贡献明细'):
+                        render_paged_table(legs, key="portfolio_leg_contribution")
+        if risk_panel.open:
+            with risk_panel:
+                risk = view['risk']
+                st.caption(f'截至 {date} · 全组合风险，不随单只标的筛选变化')
+                for column, label, key, percent in zip(st.columns(4),
+                    ['年化波动', '夏普比率', 'Sortino', '股票集中度'],
+                    ['annual_volatility', 'sharpe', 'sortino', 'concentration_hhi'],
+                    [True, False, False, False]):
+                    value = _finite_float(risk.get(key))
+                    column.metric(label, '—' if value is None else f'{value:.2%}' if percent else f'{value:.2f}')
+                def _explain_320():
+                    st.write(f"波动按{risk['annualization_sessions']}个交易日年化。夏普和Sortino衡量单位风险收益；集中度HHI越接近1，持仓越集中。")
+                    st.caption(f"有效样本 {risk.get('observations', '—')} · 状态 {risk.get('status', '—')}")
+                help_link('风险指标说明', _explain_320, key='portfolio_workspace_view_help_320')
+                exposure = view["curve"][["trade_date", "cash_weight", "gross_exposure", "net_exposure"]].copy()
+                exposure = envelope_sample(exposure, value="gross_exposure")
+                exposure_fig = build_time_series_chart(exposure,
+                    {'cash_weight':'现金比例', 'gross_exposure':'股票暴露'}, title='现金与股票暴露',
+                    revision=f'exposure-{run_id}-{date}')
+                if (pd.Timestamp(exposure.trade_date.max())-pd.Timestamp(exposure.trade_date.min())).days<90:
+                    exposure_fig.update_xaxes(tickformat='%m-%d',nticks=6)
+                st.plotly_chart(exposure_fig, width='stretch', key='portfolio_exposure', config=CHART_CONFIG)
+                exposure_row=view['ledger'].iloc[0]
+                st.caption(f"{date} 股票暴露 {exposure_row.gross_exposure:.2%} · 现金权重 {exposure_row.cash_weight:.2%}")
+        if performance.open and detail=='稳健性':
+            with performance:
+                st.caption("每个场景只改变一个假设；结果按预设顺序展示，失败和缺数据场景不计算比较差值。")
+                report = state.result["scenarios"].drop(columns=["config", "data_sha256"], errors="ignore")
+                if not report.empty and {'scenario_id', 'total_return'}.issubset(report.columns):
+                    st.plotly_chart(build_metric_bars(report, category='scenario_id', value='total_return',
+                        title='预设场景 · 区间收益', revision=f'scenarios-{run_id}'),
+                        width='stretch', config=CHART_CONFIG, key='portfolio_scenario_chart')
+                st.dataframe(report.rename(columns={"scenario_id": "场景", "changed_assumption": "变化假设",
+                    "comparable": "可比较", "status": "状态", "total_return": "区间收益",
+                    "max_drawdown": "最大回撤", "total_cost": "费用", "delta_total_return": "相对基准收益差",
+                    "delta_max_drawdown": "相对基准回撤差", "delta_total_cost": "相对基准费用差"}),
+                    width="stretch", hide_index=True)
+        if performance.open and detail=='研究归档':
+            with performance:
+                register_run(run_id=run_id, label='统一账户组合', manifest=result.inputs['run_manifest'],
+                             metrics=metrics, public_mode=public_mode)
+                render_run_audit(result.inputs['run_manifest'], integrity={'status': 'UNVERIFIED'},
+                                 public_mode=public_mode, key='portfolio_run_audit')
+                st.caption("公开摘要仅保留汇总指标。完整归档保留配置、订单和持仓，仅供本地研究。")
+                summary = create_portfolio_archive(result, mode="public_redacted")
+                st.download_button("下载公开组合摘要", json.dumps(summary, ensure_ascii=False, indent=2),
+                    "portfolio-summary.json", mime="application/json", key="portfolio_public_archive")
+                if not public_mode:
+                    local = prepared_download(key='_portfolio_archive_bytes', identity=run_id,
+                        build=lambda: json.dumps(create_portfolio_archive(result, mode="private_local"), ensure_ascii=False, indent=2))
+                    st.download_button("下载本地完整组合归档", local,
+                        "portfolio-local.json", mime="application/json", key="portfolio_private_archive")
         def _explain_361():
             for limitation in LIMITATIONS:
                 st.write(f"- {limitation}")
