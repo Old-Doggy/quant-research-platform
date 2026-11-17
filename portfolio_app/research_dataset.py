@@ -46,3 +46,7 @@ def record_context(session, workspace, frame, *, source_kind=None, price_basis=N
         price_basis=price_basis or metadata['price_basis'], period=period,
         snapshot_id=metadata.get('snapshot_id'), dataset_generation=metadata.get('dataset_generation'),
         as_of=pd.to_datetime(frame.trade_date).max().date().isoformat(), symbol=symbol)
+    selection=frame.attrs.get('screen_selection')
+    if selection:
+        session[f'_actual_context_{workspace}']['screen_id']=selection['screen_id']
+        session[f'_actual_context_{workspace}']['selected_on']=selection['selected_on']

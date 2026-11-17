@@ -188,4 +188,17 @@ def render_screener(store,manifest):
                 st.error('筛选未能保存，请检查名称与本地目录。')
         if not result['research_ready']:
             st.caption('此行情版尚缺公司行为与交易状态核验，当前名单仅供浏览。')
+        elif result['symbols']:
+            st.caption('将完整固定名单送入研究，历史截至筛选日；不代表历史逐日选股。')
+            first,second=st.columns(2)
+            for column,target,label in [(first,'factors','送入因子研究'),(second,'strategy','送入策略研究')]:
+                if column.button(label,key='screen_send_to_'+target):
+                    try:
+                        from .screen_research_transfer import prepare_screen_research
+                        query=prepare_screen_research(store,result,st.session_state,target=target)
+                    except (ValueError,OSError,KeyError):
+                        st.error('名单或研究数据未通过核对，请检查行情版本和研究所需字段。')
+                    else:
+                        st.query_params.from_dict(query)
+                        st.rerun()
     return None
