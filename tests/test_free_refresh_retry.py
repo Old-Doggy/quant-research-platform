@@ -34,6 +34,23 @@ def test_retry_reads_pinned_reference_and_only_fetches_failed_source(tmp_path):
     again=run_plan(tmp_path,first['plan_id'],providers=providers)
     assert again['snapshot']['generation']==resumed['snapshot']['generation']
     assert calls=={'baostock':1,'sina':2}
+    # Identical market bytes do not make revised reference contracts equivalent.
+    import copy
+    revised=copy.deepcopy(resumed['snapshot']['instrument_master'])
+    revised['records'][0]['name']='旧版证券名称'
+    revised['changes'][0]['observations'][0]['name']='旧版证券名称'
+    from portfolio_app.instrument_master import InstrumentMaster
+    from portfolio_app.calendar_service import MarketCalendar
+    calendar_payload=resumed['snapshot']['calendars']['SSE'].copy()
+    calendar_payload.pop('schema_version')
+    calendar_payload['days']=tuple((d,o) for d,o in calendar_payload['days'])
+    stale=store.publish_daily(dataset_id='free-a-daily',batch_ids=resumed['snapshot']['batch_ids'],
+        comparison_ids=resumed['snapshot']['comparison_ids'],master=InstrumentMaster.from_dict(revised),
+        calendars={'SSE':MarketCalendar(**calendar_payload)},start='2025-01-02',end='2025-01-02',
+        symbols=['600000.SH'],reference_batch_ids=resumed['snapshot']['reference_batch_ids'])
+    corrected=run_plan(tmp_path,first['plan_id'],providers=providers)
+    assert corrected['snapshot']['generation']>stale['generation']
+    assert corrected['snapshot']['instrument_master']==resumed['snapshot']['instrument_master']
     path=tmp_path/'refresh-plans'/(first['plan_id']+'.json')
     path.write_text(path.read_text(encoding='utf8').replace('2025-01-02','2025-01-03'),encoding='utf8')
     with pytest.raises(ValueError,match='校验'):

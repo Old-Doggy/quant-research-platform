@@ -73,7 +73,12 @@ def run_plan(root, plan_id, *, retry=False, providers=None):
         return dict(**result,status='needs_review',checks=checks)
     # Re-running an already published plan does not create a duplicate generation.
     current=store.current(plan['dataset_id'])
-    if current and current['batch_ids']==artifacts['baostock'] and current['comparison_ids']==artifacts['sina'] and current.get('reference_batch_ids')==plan['reference_batch_ids']:
+    if (current and current['batch_ids']==artifacts['baostock']
+            and current['comparison_ids']==artifacts['sina']
+            and current.get('reference_batch_ids')==plan['reference_batch_ids']
+            and current['instrument_master']==master.to_dict()
+            and current['calendars']=={name:value.to_dict() for name,value in calendars.items()}
+            and current['range']==dict(start=plan['start'],end=plan['end'],symbols=sorted(set(plan['symbols'])))):
         return dict(**result,status='published',snapshot=current,checks=checks)
     try:
         snapshot=store.publish_daily(dataset_id=plan['dataset_id'],batch_ids=artifacts['baostock'],comparison_ids=artifacts['sina'],
