@@ -153,6 +153,7 @@ def locked_validation_report(frame, strategy_key, *, params=None, transaction_co
         parameters=normalized, cost={'turnover': transaction_cost, 'extra_bps': [0, 5, 10]},
         evaluation='fixed_parameter_oos', processing={'split': split, 'version': 1})
     return dict(method='fixed_parameter_oos', fit_performed=False,
+        sessions=source.trade_date.dt.strftime('%Y-%m-%d').tolist(),
         run_manifest=manifest,
         test_used_for_selection=False, selected_parameters=None, attempts=attempts,
         split=split, fit_scope=scope, validation_sensitivity=sensitivity,

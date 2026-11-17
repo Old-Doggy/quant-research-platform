@@ -100,7 +100,10 @@ def render_result_history(*, public_mode):
     if dated is not None and not dated.empty:
         st.caption(f"{str(dated.trade_date.min())[:10]} — {str(dated.trade_date.max())[:10]} · {len(dated):,} 个交易日")
     if display == '图表':
-        if curve is not None and not curve.empty:
+        if value.get('method')=='fixed_parameter_oos':
+            from .result_presentations import render_validation_results
+            render_validation_results(value)
+        elif curve is not None and not curve.empty:
             st.plotly_chart(build_performance_chart(curve, nav='nav',
                 benchmark='benchmark_nav' if 'benchmark_nav' in curve else None,
                 revision=selected), width='stretch', config=CHART_CONFIG, key='saved_result_curve')
@@ -110,7 +113,7 @@ def render_result_history(*, public_mode):
         else:
             st.caption('这次运行没有保存连续曲线，可在表格中查看已有明细。')
     tables = projection['tables']
-    if display == '表格' or (curve is None and ic is None):
+    if display == '表格' or (curve is None and ic is None and value.get('method')!='fixed_parameter_oos'):
         if tables:
             name = st.selectbox('明细', list(tables), filter_mode=None, key='saved_result_table')
             frame = tables[name]
@@ -143,7 +146,9 @@ def render_result_history(*, public_mode):
                     from .result_replay import replay_saved
                     with st.spinner('核对保存输入与计算结果…'):
                         report = replay_saved(store, selected)
-                    if report['kind']=='factor_comparison':
+                    if report['kind']=='validation':
+                        st.success(f"{report['sessions']:,} 个交易日切分与 {report['attempts']:,} 项验证结果一致。")
+                    elif report['kind']=='factor_comparison':
                         st.success(f"{report['sessions']:,} 个交易日、{report['rows']:,} 条实际因子记录与相关性结果一致。")
                     elif report['kind'] == 'factor':
                         st.success(f"{report['sessions']:,} 个交易日、{report['rows']:,} 条截面记录一致；IC、分组收益与换手一致。")

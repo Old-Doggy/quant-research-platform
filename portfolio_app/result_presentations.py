@@ -96,8 +96,13 @@ def build_validation_chart(frame, kind):
             text=pivot.map(lambda v:f'{v:.2%}').to_numpy(),texttemplate='%{text}',textfont=dict(size=16),
             colorscale=[[0,'#E9F0FB'],[1,'#2864D7']],showscale=False,xgap=5,ygap=5,
             hovertemplate='%{y}<br>额外滑点 %{x}<br>区间收益 %{z:.2%}<extra></extra>'))
+        # Scatter cells receive point-selection events; Heatmap alone cannot emit them.
+        fig.add_trace(go.Scatter(x=[f'+{value} bp' for value in data['额外滑点（bp）']],y=data['参数'],mode='markers',
+            marker=dict(size=36,opacity=0),showlegend=False,
+            customdata=frame[['参数','额外滑点bp','区间收益']].values.tolist(),
+            hovertemplate='%{y}<br>额外滑点 %{x}<br>区间收益 %{customdata[2]:.2%}<extra></extra>'))
         style_chart(fig,title='参数与交易成本敏感性',height=340)
-        fig.update_layout(hovermode='closest');fig.update_xaxes(side='top',showspikes=False)
+        fig.update_layout(hovermode='closest',clickmode='event+select');fig.update_xaxes(side='top',showspikes=False)
         fig.update_yaxes(autorange='reversed',showgrid=False,dtick=1)
         return fig
     labels=([f"窗口 {r['窗口']} · {r['开始日期']} → {r['结束日期']}" for _,r in data.iterrows()]
@@ -109,18 +114,22 @@ def build_validation_chart(frame, kind):
 
 def render_validation_results(report):
     from .research_help import help_link
+    from .validation_view import render_timeline,render_parameter_selection
+    render_timeline(report)
     def explain():
         st.write(f"{report['attempts']} 次预设诊断；purge / embargo 各 {report['split']['horizon_sessions']} 个会话。")
         for text in report['limitations']:st.write(text)
     help_link('验证方法',explain,key='locked_validation_method')
-    tabs=st.tabs(['测试窗口','参数与成本','负对照'])
+    tabs=st.tabs(['测试窗口','参数与成本','负对照'],key='locked_validation_tab',on_change='rerun')
     for tab,kind,field in zip(tabs,['oos','sensitivity','controls'],['rolling_oos','validation_sensitivity','negative_controls']):
+        if not tab.open: continue
         with tab:
             frame=report[field]
             if frame.empty:
                 st.info('当前区间暂无结果。');continue
             if display_mode('locked_view_'+kind)=='chart':
-                st.plotly_chart(build_validation_chart(frame,kind),width='stretch',config=CHART_CONFIG)
+                if kind=='sensitivity': render_parameter_selection(frame,build_validation_chart)
+                else: st.plotly_chart(build_validation_chart(frame,kind),width='stretch',config=CHART_CONFIG)
             else:
                 st.dataframe(validation_table(frame),hide_index=True,width='stretch',column_config={
                     col:st.column_config.NumberColumn(format='percent') for col in ['区间收益','最大回撤']})

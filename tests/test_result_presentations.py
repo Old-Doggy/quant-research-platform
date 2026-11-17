@@ -22,6 +22,8 @@ def test_validation_heatmap_and_chinese_table_preserve_negative_results():
     fig=build_validation_chart(frame,'sensitivity')
     assert list(fig.data[0].z[0])==[-.05,-.06]
     assert list(fig.data[0].text[0])==['-5.00%','-6.00%']
+    assert fig.data[1].hoverinfo!='skip'
+    assert list(fig.data[1].customdata[1][:2])==['fast=10,slow=30',10]
     table=validation_table(frame)
     assert table['评分区间'].tolist()==['验证段']*2
     assert table['参数'].iloc[0]=='快线 10 / 慢线 30'

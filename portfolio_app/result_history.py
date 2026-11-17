@@ -9,6 +9,15 @@ WORKSPACES = {'strategy': '策略', 'dashboard': '看盘研究', 'portfolio': '�
 def result_projection(value):
     projection = dict(curve=None, ic=None, metrics=value.get('metrics', {}),
         tables={}, manifest=value.get('run_manifest'), parameters=value.get('research_parameters', {}))
+    if value.get('method')=='fixed_parameter_oos':
+        from .validation_view import validation_segments
+        if value.get('sessions'):
+            projection['tables']['验证区间']=validation_segments(value['sessions'],value['split'])
+        projection['tables'].update({label:value[key].copy() for label,key in [
+            ('测试窗口','rolling_oos'),('参数与成本','validation_sensitivity'),('负对照','negative_controls')]})
+        projection['parameters']=dict(split=value['split'],attempts=value['attempts'],
+            selected_parameters=value['selected_parameters'],test_used_for_selection=value['test_used_for_selection'])
+        return projection
     if 'comparison' in value:
         comparison=value['comparison']
         projection['tables']={name:comparison[key].copy() for name,key in [

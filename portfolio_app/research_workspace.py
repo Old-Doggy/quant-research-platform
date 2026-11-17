@@ -479,9 +479,16 @@ def _render_explicit_research_workspace(route_state) -> None:
                 from portfolio_app.validation import locked_validation_report
                 from portfolio_app.research_task_view import background_task
                 def validate(token):
-                    return locked_validation_report(
-                        demo_frame.loc[demo_frame.symbol.eq(symbols[0])], strategy_key,
+                    source=demo_frame.loc[demo_frame.symbol.eq(symbols[0])].copy()
+                    report=locked_validation_report(
+                        source, strategy_key,
                         params=strategy_params, transaction_cost=float(transaction_cost), token=token)
+                    if not PUBLIC_MODE:
+                        from .result_replay import validation_replay_inputs
+                        report['replay']=validation_replay_inputs(source,strategy_key=strategy_key,
+                            params=strategy_params,transaction_cost=float(transaction_cost))
+                    report['data_mode']='synthetic' if metadata['source_kind']=='synthetic' else metadata['source_kind']
+                    return report
                 validation_task, report = background_task(workspace='strategy-validation',
                     identity=state.draft_fingerprint, compute=validate, start=validation_start, public_mode=PUBLIC_MODE)
                 if report is not None:

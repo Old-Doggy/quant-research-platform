@@ -56,6 +56,13 @@ def comparison_replay_inputs(frame, *, config):
         frame=source,input_identity=_input_identity(source),config=copy.deepcopy(config))
 
 
+def validation_replay_inputs(frame,*,strategy_key,params,transaction_cost,horizon=5):
+    source=_source_frame(frame,strategy_input_fields(strategy_key))
+    return dict(schema='research-replay.v1',kind='validation',revision=computation_revision(),
+        frame=source,input_identity=_input_identity(source),config=dict(strategy_key=strategy_key,
+            params=copy.deepcopy(params),transaction_cost=float(transaction_cost),horizon=horizon))
+
+
 def _equal_values(expected, actual):
     """Numerics tolerate roundoff; missing observations never compare as zero."""
     if isinstance(expected, dict) and isinstance(actual, dict):
@@ -75,10 +82,26 @@ def replay_saved(store, task_id):
     replay = value.get('replay')
     if not isinstance(replay, dict) or replay.get('schema') != 'research-replay.v1':
         raise ValueError('此结果未保存完整复算输入')
-    if replay.get('kind') not in ('single_stock', 'cash_portfolio', 'factor','factor_comparison'):
+    if replay.get('kind') not in ('single_stock', 'cash_portfolio', 'factor','factor_comparison','validation'):
         raise ValueError('此研究类型尚未接入复算')
     if replay.get('revision') != computation_revision():
         raise ValueError('计算或依赖版本已变化，不能按原版本复算')
+    if replay['kind']=='validation':
+        from .validation import locked_validation_report
+        frame=replay.get('frame')
+        if not isinstance(frame,pd.DataFrame) or _input_identity(frame)!=replay.get('input_identity'):
+            raise ValueError('验证输入身份不一致')
+        actual=locked_validation_report(frame.copy(deep=True),**replay['config'])
+        try:
+            for field in ('validation_sensitivity','negative_controls','rolling_oos'):
+                pd.testing.assert_frame_equal(actual[field],value[field],rtol=1e-10,atol=1e-10)
+            for field in ('method','sessions','split','fit_scope','attempts','test_used_for_selection','selected_parameters','prefix'):
+                if not _equal_values(actual[field],value[field]): raise AssertionError(field)
+        except (AssertionError,KeyError):
+            raise ValueError('验证区间、参数或样本外结果复算不一致') from None
+        return dict(status='matched',kind='validation',sessions=len(actual['sessions']),
+            rows=sum(len(actual[k]) for k in ('validation_sensitivity','negative_controls','rolling_oos')),
+            attempts=actual['attempts'],curves=0,trade_events=0)
     if replay['kind']=='factor_comparison':
         from .factor_comparison import research_factor_comparison
         frame=replay.get('frame')
