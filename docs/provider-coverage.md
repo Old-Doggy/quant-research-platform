@@ -2,6 +2,10 @@
 
 适配器能解析响应，不等于整个来源已通过研究验收。`complete`只针对请求的记录范围；财务时点、事件完整度和跨源一致性分别检查。当前尚未启用自动主备切换。
 
+## 2026-11-17 精简范围复核
+
+独立CLI实际采集600000.SH、688001.SH，2026-11-13/16/17共6条日线；BaoStock主表/日历和行情与新浪行情独立核对，覆盖及比较均通过，发布浏览快照。证券主表已修正为所选池统一观察，不把单证券响应缺其他股票误报为缺失；新引用合同与旧版不同会发布新代次。原始响应保留本机，见[本轮固定范围](closeout-scope.md)。公司行为/交易状态/制度尚不足以开放该真实样本回测，研究门禁仍生效。无Tushare凭据，不增加其真实验权结论，不启用自动备用。
+
 ## 2026-11-15 本机检查
 
 Tushare未配置token，九类接口具备适配/权限检查入口，真实访问、账户频次及覆盖未验证。官方文档：[日线](https://tushare.pro/document/2?doc_id=27)、[主表](https://tushare.pro/document/2?doc_id=25)、[日历](https://tushare.pro/document/2?doc_id=26)、[复权因子](https://tushare.pro/document/2?doc_id=28)、[每日指标](https://tushare.pro/document/2?doc_id=32)、[分红](https://tushare.pro/document/2?doc_id=103)、[停复牌](https://tushare.pro/document/2?doc_id=214)、[涨跌停](https://tushare.pro/document/2?doc_id=183)、[指数](https://tushare.pro/document/2?doc_id=95)。
