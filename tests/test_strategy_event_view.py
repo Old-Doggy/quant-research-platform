@@ -82,6 +82,9 @@ def test_all_single_templates_lazy_views_keep_saved_run(monkeypatch,tmp_path):
         assert state.status.value=='result'
         count=state.run_count
         assert len(view.get('plotly_chart'))==1
+        view.segmented_control(key='strategy_nav_display').set_value('表格').run()
+        assert not view.exception and len(view.get('plotly_chart'))==0
+        view.segmented_control(key='strategy_nav_display').set_value('图表').run()
         view.session_state['strategy_main_view']='买卖事件';view.run()
         assert not view.exception and not view.error
         if state.result['result_payload']['details']['trades']:

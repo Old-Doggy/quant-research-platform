@@ -147,13 +147,24 @@ def _render_single_strategy_result_payload(
             if curve.empty:
                 st.info("当前结果没有可展示的净值曲线。")
             else:
+                display=st.segmented_control('净值展示',['图表','表格'],default='图表',required=True,key='strategy_nav_display')
+                table=curve.rename(columns=dict(date='日期',nav='净值',benchmark_nav='买入持有净值',
+                    drawdown='回撤',daily_return='日收益',daily_cost='日成本'))
                 curve["trade_date"] = pd.to_datetime(curve.pop("date"))
                 curve["equity"] = curve.pop("nav")
                 curve["benchmark_equity"] = curve.pop("benchmark_nav")
                 curve["drawdown"] = pd.to_numeric(curve.get("drawdown"), errors="coerce")
-                st.plotly_chart(build_performance_chart(curve, nav="equity", benchmark="benchmark_equity",
-                    revision=f"strategy-{state.run_id}"), width="stretch", config=CHART_CONFIG,
-                    key=f"explicit-performance-{state.run_id}")
+                if display=='图表':
+                    from .research_display import envelope_sample
+                    shown=envelope_sample(curve,value=['equity','benchmark_equity','drawdown'])
+                    st.plotly_chart(build_performance_chart(shown, nav="equity", benchmark="benchmark_equity",
+                        revision=f"strategy-{state.run_id}"), width="stretch", config=CHART_CONFIG,
+                        key=f"explicit-performance-{state.run_id}")
+                else:
+                    from .research_display import render_paged_table
+                    render_paged_table(table,key='strategy_nav_table')
+                st.download_button('下载净值数据',table.to_csv(index=False).encode('utf-8-sig'),
+                    'strategy-nav.csv','text/csv',key='strategy_nav_csv')
                 def _explain_141():
                     st.write('净值已扣设定成本；灰线为同标的买入持有，回撤相对策略历史峰值。拖动框选缩放，双击复位，点击图例显隐。')
                 help_link('图表与计算说明', _explain_141, key='research_workspace_help_141')
@@ -183,13 +194,8 @@ def _render_single_strategy_result_payload(
             cost_columns[1].metric("累计成本", f"{float(cost_metrics.get('total_cost', 0.0)):.2%}")
             cost_columns[2].metric("产生成本的交易日", str(int(performance.get("diagnostics", {}).get("cost_rows", 0) or 0)))
             st.caption("成本 = 持仓换手 × 设定费率")
-            cost_frame = build_strategy_result_cost_frame(performance)
-            if cost_frame.empty:
-                st.info("当前结果没有产生成本记录。")
-            else:
-                for column in ("日收益", "日成本"):
-                    cost_frame[column] = cost_frame[column].map(lambda value: "—" if pd.isna(value) else f"{float(value):.2%}")
-                st.dataframe(cost_frame, width="stretch", hide_index=True)
+            from .strategy_cost_view import render_strategy_costs
+            render_strategy_costs(performance,revision=f'strategy-cost-{state.run_id}')
     if costs_panel.open and detail=='参数敏感性':
         with costs_panel:
             st.subheader("当前运行参数")
