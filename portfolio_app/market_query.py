@@ -66,7 +66,8 @@ def query_daily(store, snapshot_id, *, symbols, start, end, columns,
     result.attrs=first_meta['frame_attrs'].copy()
     result.attrs['snapshot']=manifest['reference']
     result.attrs['research_dataset']=dict(dataset_id=manifest['dataset_id'],version=snapshot_id,
-        price_basis='raw',source_kind='provider_snapshot')
+        price_basis='raw',source_kind='provider_snapshot',snapshot_id=snapshot_id,
+        dataset_generation=manifest['generation'])
     result.attrs['research_capabilities']=manifest['research_capabilities']
     result.attrs['previous_close_policy']=PREVIOUS_CLOSE_POLICY
     result.attrs['query']=dict(rows=len(result),arrow_bytes=bytes_used,pandas_bytes=pandas_bytes,

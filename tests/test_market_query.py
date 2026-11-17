@@ -18,6 +18,11 @@ def test_query_filters_columns_and_rows_and_records_snapshot_without_full_frame_
     assert result.close.tolist()==[10.]
     assert result.attrs['snapshot']['snapshot_id']==manifest['snapshot_id']
     assert result.attrs['research_capabilities']['corporate_action_backtest'] is False
+    from portfolio_app.research_dataset import record_context
+    session={}
+    record_context(session,'watch',result)
+    assert session['_actual_context_watch']['snapshot_id']==manifest['snapshot_id']
+    assert session['_actual_context_watch']['dataset_generation']==manifest['generation']
 
 
 def test_query_budgets_and_unknown_scope_fail_before_unbounded_result(tmp_path):
