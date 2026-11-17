@@ -9,6 +9,7 @@ from .providers.baostock_reference import BaoStockReference
 from .providers.free_sdk import FreeDailyProvider
 from .snapshot_store import SnapshotStore
 from .dataset_registry import _validate_dataset_id
+from .snapshot_contracts import identity_hash
 
 
 def validate_free_scope(symbols, start, end):
@@ -36,11 +37,17 @@ def refresh_free_daily(root, *, symbols, start, end, observed_on=None, dataset_i
     providers=providers or {p:FreeDailyProvider(p) for p in ('sina','baostock')}
     master=InstrumentMaster()
     references=[]
+    instruments=[]
+    master_batches=[]
     for symbol in symbols:
         batch=reference.instrument(symbol,observed_on=observed_on)
         references.append(store.updates.save_artifact(batch))
-        master.update(batch.frame.to_dict('records'),observed_on=observed_on,source='baostock.stock_basic',
-            batch_id=batch.metadata['batch_id'],provider_scope=['baostock'])
+        instruments.extend(batch.frame.to_dict('records'))
+        master_batches.append(batch.metadata['batch_id'])
+    # Each single-security response is partial. Compare one complete selected pool,
+    # otherwise fetching the next symbol falsely marks earlier symbols missing.
+    master.update(instruments,observed_on=observed_on,source='baostock.stock_basic',
+        batch_id='baostock-selected-master-'+identity_hash(master_batches),provider_scope=['baostock'])
     calendars={}
     for market in sorted({r.market for r in master.records.values()}):
         batch=reference.calendar(market,start,end,generation=1)

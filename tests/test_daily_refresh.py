@@ -48,3 +48,30 @@ def test_failed_provider_cannot_publish_success(tmp_path):
         observed_on='2026-11-15',reference=BaoStockReference(transport=references),providers=providers)
     assert result['status']=='incomplete'
     assert SnapshotStore(tmp_path).current('free-a-daily') is None
+
+
+def test_selected_security_queries_form_one_master_observation(tmp_path):
+    from portfolio_app.daily_refresh import refresh_free_daily
+    from portfolio_app.providers.baostock_reference import BaoStockReference
+    from portfolio_app.providers.free_sdk import FreeDailyProvider
+    from test_free_sdk_providers import sample
+    def references(**params):
+        if params['start']==params['end']=='2026-11-15':
+            code=params['symbol'][:6]
+            return pd.DataFrame(dict(code=['sh.'+code],code_name=['测试'+code],ipoDate=['1999-11-10'],
+                outDate=[''],type=['1'],status=['1']))
+        return pd.DataFrame(dict(calendar_date=['2025-01-02'],is_trading_day=['1']))
+    def daily(name,**params):
+        frame=sample(name)
+        if name=='baostock':
+            frame['code']='sh.'+params['symbol'][:6]
+        return frame
+    providers={name:FreeDailyProvider(name,transport=lambda name=name,**kw:daily(name,**kw))
+        for name in ('sina','baostock')}
+    result=refresh_free_daily(tmp_path,symbols=['600000.SH','688001.SH'],start='2025-01-02',end='2025-01-02',
+        observed_on='2026-11-15',reference=BaoStockReference(transport=references),providers=providers)
+    assert result['status']=='published'
+    master=result['snapshot']['instrument_master']
+    assert len(master['records'])==2
+    assert all(not change['missing'] for change in master['changes'])
+    assert len(result['snapshot']['reference_batch_ids'])==3
