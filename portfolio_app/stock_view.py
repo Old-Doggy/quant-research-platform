@@ -15,6 +15,18 @@ def number(value: object) -> float | None:
     return value if math.isfinite(value) else None
 
 
+def quote_previous_closes(frame: pd.DataFrame) -> pd.Series:
+    """Respect explicit upstream gaps; legacy fallback is per security only."""
+    previous = pd.to_numeric(
+        frame.get("pre_close", pd.Series(float("nan"), index=frame.index)), errors="coerce"
+    ).replace(0, float("nan"))
+    if frame.attrs.get("previous_close_policy") == "explicit_source_only.v1":
+        return previous
+    close = pd.to_numeric(frame["close"], errors="coerce")
+    symbols = frame.get("symbol", frame.get("ts_code", pd.Series("", index=frame.index)))
+    return previous.fillna(close.groupby(symbols, dropna=False).shift(1))
+
+
 def build_single_stock_snapshot(frame: pd.DataFrame, *, symbol: str = "") -> dict[str, object]:
     """Separate the latest historical quote from simulated strategy state."""
     data = frame.sort_values("trade_date").copy()
@@ -22,9 +34,7 @@ def build_single_stock_snapshot(frame: pd.DataFrame, *, symbol: str = "") -> dic
         raise ValueError("single stock snapshot requires data")
     latest = data.iloc[-1]
     close = number(latest["close"])
-    previous = number(latest.get("pre_close"))
-    if previous is None and len(data) > 1:
-        previous = number(data.iloc[-2]["close"])
+    previous = number(quote_previous_closes(data).iloc[-1])
     first = number(data.iloc[0]["close"])
     fills = sorted(
         [event for event in frame.attrs.get("trade_events", []) if event.get("event_type") == "FILL"],
@@ -48,10 +58,7 @@ def build_single_stock_snapshot(frame: pd.DataFrame, *, symbol: str = "") -> dic
 def build_stock_quote_table(frame: pd.DataFrame, *, limit: int = 12) -> pd.DataFrame:
     """Readable quote history; source units stay unchanged and are never guessed."""
     data = frame.sort_values("trade_date").copy()
-    changes = pd.to_numeric(data["close"], errors="coerce").pct_change()
-    if "pre_close" in data:
-        previous = pd.to_numeric(data["pre_close"], errors="coerce").replace(0, float("nan"))
-        changes = (data["close"] / previous - 1).fillna(changes)
+    changes = pd.to_numeric(data["close"], errors="coerce") / quote_previous_closes(data) - 1
     data["_change"] = changes
     data = data.tail(max(1, int(limit)))
     table = pd.DataFrame({"日期": pd.to_datetime(data["trade_date"]).dt.strftime("%Y-%m-%d")})

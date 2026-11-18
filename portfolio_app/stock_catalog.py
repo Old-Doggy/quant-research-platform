@@ -6,6 +6,7 @@ import math
 from collections.abc import Mapping, Sequence
 
 import pandas as pd
+from .stock_view import quote_previous_closes
 
 
 def _number(value: object) -> float | None:
@@ -65,9 +66,7 @@ def build_stock_catalog(
     result: list[dict[str, object]] = []
     for symbol, group in data.groupby("_symbol", sort=True):
         latest = group.iloc[-1]
-        previous = _number(latest.get("pre_close"))
-        if previous is None and len(group) > 1:
-            previous = _number(group.iloc[-2].get("close"))
+        previous = _number(quote_previous_closes(group).iloc[-1])
         close = _number(latest.get("close"))
         change = close / previous - 1 if close is not None and previous not in (None, 0) else None
         result.append(
@@ -140,9 +139,7 @@ def build_market_view(
         )
     latest = data.iloc[-1]
     close = _number(latest.get("close"))
-    previous = _number(latest.get("pre_close"))
-    if previous is None and len(data) > 1:
-        previous = _number(data.iloc[-2].get("close"))
+    previous = _number(quote_previous_closes(data).iloc[-1])
     return {
         **base,
         "status": "READY",

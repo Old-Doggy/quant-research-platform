@@ -92,3 +92,34 @@ def test_canonical_reread_does_not_refill_explicitly_missing_source_previous_clo
         open=[10.]*2,high=[11.]*2,low=[9.]*2,close=[10.]*2,vol=[100.]*2,amount=[100.]*2))
     frame = normalize_daily(raw,profile='tushare_a_daily',batch_id='missing')
     assert normalise_market_frame(frame).pre_close.isna().all()
+
+
+def test_display_chart_table_and_snapshot_keep_explicit_unknown_previous_close():
+    from portfolio_app.result_presentations import build_quote_chart
+    from portfolio_app.stock_view import build_stock_quote_table,build_single_stock_snapshot
+    from portfolio_app.market_periods import aggregate_ohlcv
+    frame=pd.DataFrame(dict(symbol=['600000.SH']*3,trade_date=pd.to_datetime(['2025-01-02','2025-01-03','2025-01-06']),
+        open=[10.,11.,12.],high=[10.,11.,12.],low=[10.,11.,12.],close=[10.,11.,12.],
+        pre_close=[9.,None,None],vol=[100.]*3))
+    frame.attrs['previous_close_policy']='explicit_source_only.v1'
+    chart=build_quote_chart(frame)
+    assert pd.isna(chart.data[0].y[1]) and pd.isna(chart.data[0].y[2])
+    assert build_stock_quote_table(frame)['涨跌幅'].tolist()==['+11.11%','--','--']
+    assert build_single_stock_snapshot(frame)['daily_change'] is None
+    from portfolio_app.stock_catalog import build_market_view,build_stock_catalog
+    assert build_market_view(frame,symbol='600000.SH')['quote']['change'] is None
+    assert build_stock_catalog(frame)[0]['change'] is None
+    week=aggregate_ohlcv(frame,'1w')
+    assert week.pre_close.iloc[0]==9.
+    assert pd.isna(week.pre_close.iloc[1])
+    assert week.attrs['previous_close_policy']=='explicit_source_only.v1'
+
+
+def test_legacy_display_fallback_stays_within_each_security():
+    from portfolio_app.result_presentations import build_quote_chart
+    frame=pd.DataFrame(dict(symbol=['AAA','BBB','AAA','BBB'],
+        trade_date=pd.to_datetime(['2025-01-02','2025-01-02','2025-01-03','2025-01-03']),
+        open=[10.,100.,11.,90.],high=[10.,100.,11.,90.],low=[10.,100.,11.,90.],close=[10.,100.,11.,90.]))
+    fig=build_quote_chart(frame)
+    assert pd.isna(fig.data[0].y[0]) and pd.isna(fig.data[0].y[1])
+    assert list(fig.data[0].y[2:])==pytest.approx([.1,-.1])

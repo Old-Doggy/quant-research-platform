@@ -5,7 +5,7 @@ from plotly.subplots import make_subplots
 import streamlit as st
 
 from .research_charts import style_chart, build_comparison_chart, CHART_CONFIG
-from .stock_view import build_stock_quote_table
+from .stock_view import build_stock_quote_table, quote_previous_closes
 
 
 def display_mode(key):
@@ -16,8 +16,7 @@ def display_mode(key):
 
 def build_quote_chart(frame, *, activity='vol', limit=12):
     data = frame.sort_values('trade_date').copy()
-    previous = pd.to_numeric(data.get('pre_close', data.close.shift()), errors='coerce').replace(0, float('nan'))
-    previous = previous.fillna(pd.to_numeric(data.close, errors='coerce').shift())
+    previous = quote_previous_closes(data)
     change = data.close / previous - 1
     data = data.tail(limit)
     change = change.loc[data.index]

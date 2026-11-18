@@ -513,9 +513,8 @@ def _render_pure_stock_view(
     st.caption(f"{period_label} · {market_window['window']['start']} — {market_window['window']['end']}")
     latest = display_frame.iloc[-1]
     close = number(latest.get("close"))
-    previous = number(latest.get("pre_close"))
-    if previous is None and len(display_frame) > 1:
-        previous = number(display_frame.iloc[-2].get("close"))
+    from portfolio_app.stock_view import quote_previous_closes
+    previous = number(quote_previous_closes(display_frame).iloc[-1])
     quote = {
         "close": close,
         "previous_close": previous,

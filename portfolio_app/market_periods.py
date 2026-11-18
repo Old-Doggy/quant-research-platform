@@ -103,8 +103,9 @@ def aggregate_ohlcv(frame: pd.DataFrame, period: str = "1d") -> pd.DataFrame:
             row["turnover_rate"] = group["turnover_rate"].sum(min_count=1)
         rows.append(row)
     result = pd.DataFrame(rows).sort_values(["symbol", "trade_date"], kind="stable").reset_index(drop=True)
-    if not result.empty:
+    if not result.empty and frame.attrs.get("previous_close_policy") != "explicit_source_only.v1":
         result["pre_close"] = result.groupby("symbol", dropna=False)["close"].shift(1)
+    result.attrs = data.attrs.copy()
     # Keep this metadata as ordinary Python bools for JSON/UI consumers.
     result["is_complete"] = pd.Series([bool(value) for value in result["is_complete"]], dtype=object)
     return result
