@@ -33,6 +33,7 @@ python -m venv .venv
 Windows 激活环境：`.venv\Scripts\activate`；macOS / Linux：`source .venv/bin/activate`。
 
 ```bash
+python -m pip install --upgrade "pip>=26.2"
 python -m pip install -r requirements.txt
 python -m streamlit run streamlit_app.py --server.address 127.0.0.1
 ```

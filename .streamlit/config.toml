@@ -1,3 +1,6 @@
+[server]
+address = "127.0.0.1"
+
 [theme]
 base = "light"
 primaryColor = "#2864D7"
