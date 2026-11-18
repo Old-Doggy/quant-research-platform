@@ -63,7 +63,7 @@
       localization: {locale: 'zh-CN'},
       grid: {vertLines: {visible: false}, horzLines: {color: color('grid')}},
       rightPriceScale: {minimumWidth: 76, borderColor: color('line'), scaleMargins: {top: 0.12, bottom: 0.08}},
-      timeScale: {visible: last, borderColor: color('line'), tickMarkFormatter: formatTick, rightOffset: 0, minBarSpacing: density.min_bar_spacing, barSpacing: Math.max(density.min_bar_spacing, 8), fixLeftEdge: true, fixRightEdge: true},
+      timeScale: {visible: last, borderColor: color('line'), tickMarkFormatter: (time, type) => formatTick(time, type), rightOffset: 0, minBarSpacing: density.min_bar_spacing, barSpacing: Math.max(density.min_bar_spacing, 8), fixLeftEdge: true, fixRightEdge: true},
       crosshair: {mode: LightweightCharts.CrosshairMode.Normal, vertLine: {color: '#8c9ba3', labelVisible: last}, horzLine: {color: '#8c9ba3'}},
       handleScale: {axisPressedMouseMove: {time: true, price: false}, mouseWheel: true, pinch: true},
     });
