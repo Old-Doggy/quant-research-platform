@@ -63,3 +63,19 @@ a { color: #657781; text-decoration: none; }
   .pane-label > span > span { white-space: nowrap; }
   .pane-label .ohlc-values { display: flex; flex-wrap: wrap; gap: 2px 9px; }
 }
+.event-toolbar[hidden]{display:none}
+.pane-volume{flex-basis:84px}
+.pane-indicator{flex-basis:108px}
+.chart-footer{flex:0 0 auto;align-items:center;flex-wrap:wrap}
+.chart-footer button{min-height:24px;padding:1px 4px;color:var(--q-primary);border:0}
+@media(max-width:600px){
+  .chart-footer a{display:inline;font-size:13px}
+  .chart-meta span:last-child{display:none}
+  .toolbar .tools button{min-height:36px}
+  .pane-label{flex:0 0 30px;align-items:center;white-space:nowrap;overflow-x:auto;scrollbar-width:thin}
+  .pane-label > span,.pane-label .ohlc-values{flex:0 0 auto;flex-wrap:nowrap}
+  .pane-label > span{gap:9px}
+  .pane-price{min-height:205px}
+  .pane-volume{flex-basis:72px}
+  .pane-indicator{flex-basis:96px}
+}

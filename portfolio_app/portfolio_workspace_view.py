@@ -233,7 +233,7 @@ def _render_portfolio_workspace(frame, *, context_id, public_mode):
             if state.status is RunStatus.RUNNING:
                 st.info(f"{format_research_status('running', phase='simulation')}；可取消或切换页面。")
             elif state.status is RunStatus.DRAFT:
-                st.info(format_research_status('draft'))
+                st.caption('确认组合配置后运行，结果将在此显示。')
             elif state.status is RunStatus.STALE:
                 st.info(f"{format_research_status('stale')}；上次成功结果保留，请重新运行。")
             else:
@@ -250,7 +250,8 @@ def _render_portfolio_workspace(frame, *, context_id, public_mode):
         a.metric("组合区间收益", f"{summary['return']:.2%}" if summary['return'] is not None else "—")
         b.metric("最大回撤", f"{summary['drawdown']:.2%}" if summary['drawdown'] is not None else "—")
         c.metric("期末现金权重", f"{summary['cash_weight']:.2%}" if summary['cash_weight'] is not None else "—")
-        d.metric("区间换手", f"{summary['turnover']:.2%}" if summary['turnover'] is not None else "—")
+        d.metric("累计换手", f"{summary['turnover']:.2%}" if summary['turnover'] is not None else "—",
+                 help='区间累计成交金额除以初始资金，可能超过 100%。')
         cost_text = f"{summary['cost']:,.2f}" if summary['cost'] is not None else "—"
         st.caption(f"累计费用 {cost_text} · 模拟成交 {summary['fills']} 笔 · 拒单 {summary['rejected']} 笔")
         selection = st.session_state.get("portfolio_selection", {})
@@ -358,8 +359,9 @@ def _render_portfolio_workspace(frame, *, context_id, public_mode):
                 if required<=set(ledger):
                     report=contribution_period(ledger,initial_cash=result.config['initial_cash'],start=first,end=date)
                     components=report['components']
-                    st.plotly_chart(build_metric_bars(components,category='label',value='contribution',
-                        title='组合收益分解',revision=f'account-contribution-{run_id}-{date}-{scope}'),
+                    from .research_charts import build_contribution_waterfall
+                    st.plotly_chart(build_contribution_waterfall(components,
+                        revision=f'account-contribution-{run_id}-{date}-{scope}'),
                         width='stretch',config=CHART_CONFIG,key='portfolio_account_contribution')
                     st.caption(f"组合收益 {report['total_return']:.2%} · 分项合计 {components.contribution.sum():.2%}")
                     st.download_button('下载收益分解',components.to_csv(index=False).encode('utf-8-sig'),
@@ -405,7 +407,7 @@ def _render_portfolio_workspace(frame, *, context_id, public_mode):
                 risk = view['risk']
                 st.caption(f'截至 {date} · 全组合风险，不随单只标的筛选变化')
                 for column, label, key, percent in zip(st.columns(4),
-                    ['年化波动', '夏普比率', 'Sortino', '股票集中度'],
+                    ['年化波动', '夏普比率', 'Sortino', '股票集中度 HHI'],
                     ['annual_volatility', 'sharpe', 'sortino', 'concentration_hhi'],
                     [True, False, False, False]):
                     value = _finite_float(risk.get(key))

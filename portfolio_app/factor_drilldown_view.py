@@ -34,6 +34,8 @@ def render_ic_drilldown(result):
         section = factor_cross_section(result, session)
         st.metric('当日 Rank IC', f"{section['ic']:.4f}" if section['ic'] is not None else '—')
         st.caption(f"有效证券 {section['samples']:,} · 未来 {result['config']['label_horizon_sessions']} 个交易日收益")
+        if section['samples'] < 20:
+            st.caption('小样本截面，仅作描述。')
         if section['status'] != 'ok':
             st.caption({'constant_factor': '因子值相同', 'constant_label': '未来收益相同',
                 'insufficient_observations': '有效证券不足'}.get(section['status'], '相关性不可计算'))

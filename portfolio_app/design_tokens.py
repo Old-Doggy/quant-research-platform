@@ -16,6 +16,7 @@ COLOR_TOKENS = _freeze({
     "text": "#1C2D45",
     "muted_text": "#52637B",
     "divider": "#D8E0EB",
+    "grid": "#E9EEF5",
     "primary": "#2864D7",
     "research": "#0D858D",
     "purple": "#7559B4",

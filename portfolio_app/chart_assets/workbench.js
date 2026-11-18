@@ -8,7 +8,8 @@
     return;
   }
   const theme = getComputedStyle(document.documentElement);
-  const up = theme.getPropertyValue('--q-up').trim(), down = theme.getPropertyValue('--q-down').trim();
+  const color = key => theme.getPropertyValue('--q-' + key).trim();
+  const up = color('up'), down = color('down');
   const charts = [], seriesByPane = [], labels = [];
   const times = payload.bars.map(bar => bar.time);
   const barsByTime = new Map(payload.bars.map(bar => [bar.time, bar]));
@@ -19,7 +20,19 @@
   const devicePixelRatio = Math.max(1, Math.min(2, Number(window.devicePixelRatio) || 1));
   const state = payload.chart_state || {version: 1, storage_key: 'quant-chart-state-v1:default', bounds: payload.bounds || {}};
   const storageKey = String(state.storage_key || 'quant-chart-state-v1:default');
-  const format = value => Number.isFinite(value) ? value.toLocaleString('zh-CN', {maximumFractionDigits: Math.abs(value) > 0 && Math.abs(value) < .01 ? 8 : 4}) : '--';
+  const format = value => Number.isFinite(value) ? value.toLocaleString('zh-CN', {maximumFractionDigits: 4}) : '—';
+  const minimumPrice = payload.bars.reduce((minimum, bar) => Math.min(minimum, bar.low), Infinity);
+  const precision = minimumPrice >= 1 ? 2 : minimumPrice >= .1 ? 3 : Math.max(4, Math.min(16, Math.ceil(-Math.log10(minimumPrice))));
+  const priceFormat = {type: 'price', precision, minMove: 10 ** -precision};
+  const formatPrice = value => Number.isFinite(value) ? value.toLocaleString('zh-CN', {minimumFractionDigits: precision, maximumFractionDigits: precision}) : '—';
+  const tickTypes = LightweightCharts.TickMarkType;
+  function formatTick(time, type, shortRange = false) {
+    const [year, month, day] = time.split('-');
+    if (shortRange) return `${Number(month)}/${Number(day)}`;
+    if (type === tickTypes.Year) return year;
+    if (type === tickTypes.Month) return Number(month) + '月';
+    return '';
+  }
   const publicEvents = Array.isArray(payload.events) ? payload.events : [];
   // A fresh iframe must not reuse the previous mount's sequence numbers.
   let selectionSequence = Date.now() * 1000;
@@ -46,11 +59,11 @@
     wrap.append(label, canvas); panes.appendChild(wrap);
     const chart = LightweightCharts.createChart(canvas, {
       width: Math.max(120, canvas.clientWidth), height: Math.max(40, canvas.clientHeight),
-      layout: {background: {color: theme.getPropertyValue('--q-surface').trim()}, textColor: theme.getPropertyValue('--q-muted').trim(), fontSize: parseInt(theme.getPropertyValue('--q-font-chart'), 10), fontFamily: theme.getPropertyValue('--q-font').trim()},
+      layout: {background: {color: color('surface')}, textColor: color('muted'), fontSize: parseInt(color('font-chart'), 10), fontFamily: color('font'), attributionLogo: false},
       localization: {locale: 'zh-CN'},
-      grid: {vertLines: {visible: false}, horzLines: {color: '#edf1f2'}},
-      rightPriceScale: {minimumWidth: 76, borderColor: '#d8e0eb', scaleMargins: {top: 0.12, bottom: 0.08}},
-      timeScale: {visible: last, borderColor: '#e2e8eb', rightOffset: 0, minBarSpacing: density.min_bar_spacing, barSpacing: Math.max(density.min_bar_spacing, 8), fixLeftEdge: true, fixRightEdge: true},
+      grid: {vertLines: {visible: false}, horzLines: {color: color('grid')}},
+      rightPriceScale: {minimumWidth: 76, borderColor: color('line'), scaleMargins: {top: 0.12, bottom: 0.08}},
+      timeScale: {visible: last, borderColor: color('line'), tickMarkFormatter: formatTick, rightOffset: 0, minBarSpacing: density.min_bar_spacing, barSpacing: Math.max(density.min_bar_spacing, 8), fixLeftEdge: true, fixRightEdge: true},
       crosshair: {mode: LightweightCharts.CrosshairMode.Normal, vertLine: {color: '#8c9ba3', labelVisible: last}, horzLine: {color: '#8c9ba3'}},
       handleScale: {axisPressedMouseMove: {time: true, price: false}, mouseWheel: true, pinch: true},
     });
@@ -72,16 +85,15 @@
     ? `未完成周期 ${Number(periodInfo.incomplete_bars)} 根`
     : '周期完整';
   const chart = pane('price-pane', payload.symbol + ' · ' + periodLabel, 'price', false);
-  const minimumPrice = payload.bars.reduce((minimum, bar) => Math.min(minimum, bar.low), Infinity);
-  const precision = minimumPrice < .01 ? 8 : 4;
   const candles = chart.addCandlestickSeries({upColor: up, downColor: down, borderVisible: false, wickUpColor: up, wickDownColor: down, priceLineVisible: true, lastValueVisible: true,
-    priceFormat: {type: 'price', precision, minMove: 10 ** -precision}});
+    priceFormat});
   candles.setData(payload.bars);
   seriesByPane[0].push({series: candles, name: '收', values: new Map(payload.bars.map(bar => [bar.time, bar.close])), color: '#24343c'});
   if (payload.markers.length) candles.setMarkers(payload.markers);
   function addSeries(target, series, paneIndex, histogram) {
     const line = histogram ? target.addHistogramSeries({priceLineVisible: false, lastValueVisible: false}) : target.addLineSeries({
       color: series.color, lineWidth: 2, lineStyle: series.style === 'dashed' ? 2 : 0,
+      ...(paneIndex === 0 ? {priceFormat} : {}),
       priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false,
     });
     const values = new Map(series.data.map(point => [point.time, point.value]));
@@ -98,7 +110,10 @@
   const volumeUnit = String(context.volume_unit || 'unknown');
   const volumeChart = pane('volume-pane', '成交量 · ' + (volumeUnit === 'unknown' ? '源单位' : volumeUnit), 'volume', !panelGroups.length);
   const volume = volumeChart.addHistogramSeries({priceFormat: {type: 'volume'}, priceLineVisible: false, lastValueVisible: false});
-  volume.setData(times.map(time => volumeByTime.get(time) || {time}));
+  volume.setData(times.map(time => {
+    const item = volumeByTime.get(time), bar = barsByTime.get(time);
+    return item ? {...item, color: (bar.close >= bar.open ? up : down) + '65'} : {time};
+  }));
   seriesByPane[1].push({series: volume, name: 'VOL', values: new Map(payload.volume.map(item => [item.time, item.value])), color: '#52636c'});
   for (const [index, indicator] of panelGroups.entries()) {
     const panelChart = pane('panel-pane-' + index, indicator.key, 'indicator', index === panelGroups.length - 1);
@@ -115,6 +130,7 @@
   const lastBar = times.length - 1;
   let correctingRange = false, syncingCrosshair = false, persistenceReady = false;
   let currentRange = null;
+  let shortDateLabels = false;
   function visibleLimit() {
     const width = Math.max(120, root.clientWidth || 120);
     const drawableWidth = Math.max(56, width - 64);
@@ -145,7 +161,14 @@
     if (![from, to].every(Number.isFinite)) return;
     currentRange = {from, to};
     correctingRange = true;
-    try { for (const item of charts) item.chart.timeScale().setVisibleLogicalRange(currentRange); }
+    try {
+      for (const item of charts) item.chart.timeScale().setVisibleLogicalRange(currentRange);
+      const shortRange = payload.period !== '1m' && span <= (payload.period === '1w' ? 10 : 45);
+      if (shortRange !== shortDateLabels) {
+        charts.at(-1).chart.applyOptions({timeScale: {tickMarkFormatter: (time, type) => formatTick(time, type, shortRange)}});
+        shortDateLabels = shortRange;
+      }
+    }
     finally { correctingRange = false; }
     const visibleBars = Math.round(to - from + 1);
     document.getElementById('range-label').textContent = '当前可见范围 ' + times[Math.ceil(from)] + ' ~ ' + times[Math.floor(to)] + ' · ' + visibleBars + '根';
@@ -166,14 +189,14 @@
       if (index === 0 && bar) {
         const ohlc = document.createElement('span');
         ohlc.className = 'ohlc-values';
-        for (const text of [time, '开 ' + format(bar.open), '高 ' + format(bar.high), '低 ' + format(bar.low), '收 ' + format(bar.close)]) {
+        for (const text of [time, '开 ' + formatPrice(bar.open), '高 ' + formatPrice(bar.high), '低 ' + formatPrice(bar.low), '收 ' + formatPrice(bar.close)]) {
           const value = document.createElement('span'); value.textContent = text; ohlc.appendChild(value);
         }
         labels[index].appendChild(ohlc);
       }
       for (const entry of seriesByPane[index].slice(index === 0 ? 1 : 0)) {
         const text = document.createElement('span'); text.style.color = entry.color;
-        text.textContent = entry.name + ' ' + format(entry.values.get(time));
+        text.textContent = entry.name + ' ' + (index === 0 ? formatPrice : format)(entry.values.get(time));
         labels[index].appendChild(text);
       }
     }
@@ -203,7 +226,7 @@
       ['事件层', first.event_type], ['状态', group.length > 1 ? '同日聚合' : first.status], ['方向', first.side],
       ['信号日期', first.decision_date], ['执行/成交日期', first.fill_date || first.effective_date],
       ['事件数量', group.length], ['合计数量', quantity || '--'],
-      ['事件ID', ids.join('、')], ['价格', format(Number(first.price))],
+      ['事件ID', ids.join('、')], ['价格', formatPrice(first.price)],
       ['原因', first.reason_text_public || first.reason_code], ['证据字段', evidence],
     ];
     showDrawer((group.length > 1 ? '研究事件组 · ' : '研究事件 · ') + safeText(first.event_id), rows);
@@ -288,7 +311,7 @@
     const requested = button.dataset.bars === 'all' ? maxBars : Number(button.dataset.bars);
     clampRange({from: lastBar - requested + 1, to: lastBar});
   }));
-  document.querySelectorAll('[data-action]').forEach(button => button.addEventListener('click', () => {
+  document.querySelectorAll('.tools [data-action]').forEach(button => button.addEventListener('click', () => {
     const action = button.dataset.action;
     if (action === 'full') { if (document.fullscreenElement) document.exitFullscreen(); else root.requestFullscreen?.(); return; }
     if (action === 'reset') { reset(); return; }

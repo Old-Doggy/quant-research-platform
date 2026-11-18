@@ -44,7 +44,7 @@ python -m streamlit run streamlit_app.py --server.address 127.0.0.1
 
 ## 数据
 
-仓库附带合成样例及作者授权公开的历史研究汇总，不附带真实行情库。真实行情可从有权使用的数据服务商获取后导入。开发分支已有免费日线更新、财务三表和ETF/转债观察入口，另提供Tushare下载脚本。免费日线更新限最多20只沪深股票、单次一年；已有跨源核对范围见[接口记录](docs/provider-coverage.md)。
+仓库附带合成样例及作者授权公开的历史研究汇总。真实行情可从有权使用的数据服务商获取后导入。数据中心提供免费日线更新和财务三表，仓库另提供 Tushare 下载脚本。免费日线更新限最多 20 只沪深股票，单次一年。已有跨源核对范围见[接口记录](docs/provider-coverage.md)。
 
 [数据获取与字段说明](docs/data.md) · [使用指南](docs/usage.md) · [研究计算口径](docs/methodology.md) · [更新与运行](docs/operations-v2.md) · [备份恢复](docs/recovery-runbook.md)
 

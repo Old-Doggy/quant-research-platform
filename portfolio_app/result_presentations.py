@@ -6,6 +6,8 @@ import streamlit as st
 
 from .research_charts import style_chart, build_comparison_chart, CHART_CONFIG
 from .stock_view import build_stock_quote_table, quote_previous_closes
+from .design_tokens import COLOR_TOKENS
+from .stock_view import price_precision as quote_precision
 
 
 def display_mode(key):
@@ -23,7 +25,8 @@ def build_quote_chart(frame, *, activity='vol', limit=12):
     dates = pd.to_datetime(data.trade_date).dt.strftime('%Y-%m-%d')
     fig = make_subplots(rows=2, cols=1, shared_xaxes=True, vertical_spacing=.19, row_heights=[.66,.34])
     custom = data[['open','high','low','close']].to_numpy()
-    colors = ['#BD5B70' if v > 0 else '#188B83' if v < 0 else '#71829B' for v in change]
+    colors = [COLOR_TOKENS['up' if v > 0 else 'down' if v < 0 else 'benchmark'] for v in change]
+    precision = quote_precision(frame.low.min())
     labels = {len(change)-1}
     if change.notna().any():
         positional = change.reset_index(drop=True)
@@ -33,7 +36,9 @@ def build_quote_chart(frame, *, activity='vol', limit=12):
         text=[f'{v:+.2%}' if i in labels and pd.notna(v) else '' for i,v in enumerate(change)],
         textposition=['top center' if v >= 0 else 'bottom center' for v in change],
         textfont=dict(size=14,color=colors),cliponaxis=False,customdata=custom,
-        hovertemplate='涨跌幅 %{y:+.2%}<br>开盘 %{customdata[0]:.6f} · 收盘 %{customdata[3]:.6f}<br>最高 %{customdata[1]:.6f} · 最低 %{customdata[2]:.6f}<extra></extra>'),row=1,col=1)
+        hovertemplate='涨跌幅 %{y:+.2%}<br>' + ' · '.join(
+            f'{label} %{{customdata[{i}]:.{precision}f}}' for i, label in enumerate(('开', '高', '低', '收'))
+        ) + '<extra></extra>'),row=1,col=1)
     for date, value, color in zip(dates, change, colors):
         if pd.notna(value):
             fig.add_shape(type='line',x0=date,x1=date,y0=0,y1=value,
@@ -64,9 +69,12 @@ def build_quote_chart(frame, *, activity='vol', limit=12):
     return fig
 
 
-def render_recent_quotes(frame, *, key, table=None):
+def render_recent_quotes(frame, *, key, table=None, price_precision=None):
     if display_mode(key) == 'table':
-        st.dataframe(build_stock_quote_table(frame) if table is None else table, width='stretch',hide_index=True)
+        config = {name: st.column_config.NumberColumn(format=f'%.{price_precision}f')
+                  for name in ('开盘', '最高', '最低', '收盘')} if price_precision is not None else None
+        st.dataframe(build_stock_quote_table(frame) if table is None else table, width='stretch',
+                     hide_index=True, column_config=config)
         return
     options=[col for col in ['vol','amount','turnover_rate'] if col in frame and frame[col].notna().any()]
     if not options:

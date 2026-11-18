@@ -51,8 +51,9 @@ render_strategy_events(performance,trades,revision='run1')
 ''').run()
     assert not view.exception and len(view.get('plotly_chart'))==1
     view.selectbox(key='strategy_event_pick').set_value(2).run()
-    assert not view.exception and view.metric[0].value=='已拒单'
-    assert view.metric[1].value=='—'
+    assert not view.exception
+    details = next(block.value for block in view.get('html') if '事件详情' in block.value)
+    assert '已拒单' in details and '<dt>价格</dt><dd>—</dd>' in details
     view.segmented_control(key='strategy_event_display').set_value('表格').run()
     assert not view.exception and len(view.get('plotly_chart'))==0
     assert len(view.dataframe[0].value)==4

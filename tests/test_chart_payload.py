@@ -163,9 +163,8 @@ def test_chart_bridge_explains_period_basis_and_zoom_limits():
 
 
 def test_chart_range_presets_use_units_matching_the_displayed_period():
-    assert [label for label, _ in _range_presets("1d")] == ["1个月", "3个月", "6个月", "1年"]
-    assert [label for label, _ in _range_presets("1w")] == ["3个月", "6个月", "1年", "2年"]
-    assert [label for label, _ in _range_presets("1m")] == ["6个月", "1年", "2年", "5年"]
+    for period in ('1d', '1w', '1m'):
+        assert all(label == f'{bars} 根' for label, bars in _range_presets(period))
 
 
 def test_payload_contains_registry_indicator_series_split_by_pane():

@@ -19,7 +19,7 @@ def test_ic_rolling_requires_full_window_and_preserves_original_gaps():
     assert pd.isna(fig.data[1].y[5])
     assert fig.data[1].y[6] == pytest.approx(.6)
     assert fig.data[0].connectgaps is False
-    assert fig.layout.yaxis.range == (-1.05, 1.05)
+    assert fig.layout.yaxis.rangemode == 'tozero'
 
 
 def test_metric_bars_keep_order_signed_units_and_omit_unknown_values():
@@ -34,6 +34,17 @@ def test_metric_bars_keep_order_signed_units_and_omit_unknown_values():
     assert fig.layout.yaxis.autorange == 'reversed'
     amounts = build_metric_bars(frame, category='name', value='value', unit='number')
     assert ',.2f' in amounts.data[0].hovertemplate
+
+
+def test_contribution_waterfall_keeps_signed_components_and_total():
+    from portfolio_app.research_charts import build_contribution_waterfall
+    frame = pd.DataFrame({'label': ['价格变化', '现金分红', '交易费用'],
+                          'contribution': [.05, 0, -.012]})
+    trace = build_contribution_waterfall(frame, revision='test').data[0]
+    assert list(trace.x) == ['价格变化', '交易费用', '组合收益']
+    assert list(trace.y) == [.05, -.012, 0]
+    assert list(trace.measure) == ['relative', 'relative', 'total']
+    assert trace.text[-1] == '+3.80%'
 
 
 def test_performance_has_matched_time_axes_and_keeps_missing_values():

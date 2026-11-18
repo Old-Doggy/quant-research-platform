@@ -24,7 +24,7 @@ def style_chart(figure: go.Figure, *, title: str = '', height: int = 360,
         template='plotly_white', height=height,
         title=dict(text=title, font=dict(size=FONT_SIZE_TOKENS['section_title'], color=COLOR_TOKENS['text']), x=.015, xanchor='left'),
         font=dict(family=FONT, size=FONT_SIZE_TOKENS['chart'], color=COLOR_TOKENS['text']),
-        paper_bgcolor='#FFFFFF', plot_bgcolor='#FFFFFF', colorway=list(PALETTE),
+        paper_bgcolor=COLOR_TOKENS['surface'], plot_bgcolor=COLOR_TOKENS['surface'], colorway=list(PALETTE),
         margin=dict(l=18, r=48, t=100 if title else 48, b=42),
         hovermode='x unified', dragmode='zoom', uirevision=revision,
         hoverlabel=dict(font=dict(family=FONT, size=14), bgcolor='#FFFFFF'),
@@ -35,7 +35,7 @@ def style_chart(figure: go.Figure, *, title: str = '', height: int = 360,
     figure.update_xaxes(showgrid=False, zeroline=False, automargin=True, tickfont=dict(size=14),
                         showspikes=True, spikemode='across', spikesnap='cursor',
                         spikecolor='#91A1B9', spikethickness=1, spikedash='dot')
-    figure.update_yaxes(gridcolor='#E4EAF2', zerolinecolor='#CCD6E4', automargin=True,
+    figure.update_yaxes(gridcolor=COLOR_TOKENS['grid'], zerolinecolor=COLOR_TOKENS['divider'], automargin=True,
                         tickfont=dict(size=14), fixedrange=False, nticks=5)
     # The shared hover heading supplies the date once for every visible series.
     for trace in figure.data:
@@ -62,7 +62,7 @@ def build_performance_chart(frame: pd.DataFrame, *, date: str = 'trade_date',
             line=dict(color=COLOR_TOKENS['benchmark'], width=1.5, dash='dash'), connectgaps=False,
             hovertemplate='%{x|%Y-%m-%d}<br>买入持有 %{y:.4f}<extra></extra>'), row=1, col=1)
     fig.add_trace(go.Scatter(x=frame[date], y=frame[drawdown], name='回撤', mode='lines',
-        line=dict(color=COLOR_TOKENS['benchmark'], width=1.2), fill='tozeroy', fillcolor='rgba(104,120,141,.10)',
+        line=dict(color=COLOR_TOKENS['down'], width=1.4), fill='tozeroy', fillcolor='rgba(19,129,109,.14)',
         connectgaps=False, hovertemplate='%{x|%Y-%m-%d}<br>回撤 %{y:.2%}<extra></extra>'), row=2, col=1)
     style_chart(fig, title='', height=480, revision=revision)
     fig.update_layout(margin=dict(l=18, r=70, t=62, b=38), hovermode='x unified',
@@ -72,8 +72,8 @@ def build_performance_chart(frame: pd.DataFrame, *, date: str = 'trade_date',
     fig.update_layout(hoversubplots='axis')
     # One common x axis lets hover and zoom cover both panels.
     fig.data[-1].update(xaxis='x')
-    fig.update_yaxes(title_text='净值', tickformat='.2f', side='right', nticks=5, row=1, col=1)
-    fig.update_yaxes(title_text='回撤', tickformat='.1%', side='right', nticks=3,
+    fig.update_yaxes(tickformat='.2f', side='right', nticks=5, row=1, col=1)
+    fig.update_yaxes(tickformat='.1%', side='right', nticks=3,
         rangemode='tozero', zeroline=True, row=2, col=1)
     fig.update_xaxes(matches=None, anchor='y2', showticklabels=True,
         tickformat='%Y-%m', hoverformat='%Y-%m-%d', nticks=6, tickangle=0, ticklabelstep=2,
@@ -173,16 +173,16 @@ def build_ic_chart(frame: pd.DataFrame, *, value: str = 'ic', window: int = 20,
     daily = pd.to_numeric(frame[value], errors='coerce')
     rolling = daily.rolling(window, min_periods=window).mean()
     fig = go.Figure()
-    fig.add_trace(go.Scatter(x=frame.trade_date, y=daily, name='每日 Rank IC · 点击查看',
-        mode='markers', marker=dict(color='#9AACC5', size=4, opacity=.4),
-        visible='legendonly' if rolling.notna().any() else True, connectgaps=False,
+    fig.add_trace(go.Scatter(x=frame.trade_date, y=daily, name='每日 Rank IC',
+        mode='markers', marker=dict(color=COLOR_TOKENS['benchmark'], size=5, opacity=.42),
+        visible=True, connectgaps=False,
         hovertemplate='%{x|%Y-%m-%d}<br>每日 Rank IC %{y:.3f}<extra></extra>'))
     fig.add_trace(go.Scatter(x=frame.trade_date, y=rolling, name=f'{window}日均值',
         mode='lines', line=dict(color=PALETTE[0], width=2.4), connectgaps=False,
         hovertemplate=f'{window}日均值 '+'%{y:.3f}<extra></extra>'))
     style_chart(fig, title=f'Rank IC · {window}日趋势', height=330, revision=revision)
     fig.add_hline(y=0, line_color='#7A8DA9', line_width=1)
-    fig.update_yaxes(title_text='Rank IC', range=[-1.05, 1.05], tickformat='.1f')
+    fig.update_yaxes(rangemode='tozero', tickformat='.2f', side='right')
     fig.update_xaxes(tickformat='%Y-%m', tickangle=0, nticks=6,
         unifiedhovertitle=dict(text='%{x|%Y-%m-%d}'))
     return fig
@@ -197,7 +197,7 @@ def build_metric_bars(frame: pd.DataFrame, *, category: str, value: str,
     shown = shown.loc[shown[value].notna() & shown[value].abs().ne(float('inf'))]
     fmt = '.2%' if unit == 'percent' else ',.2f'
     fig = go.Figure(go.Bar(y=shown[category].astype(str), x=shown[value], orientation='h',
-        marker_color=[PALETTE[0] if v >= 0 else '#B65269' for v in shown[value]], width=.38,
+        marker_color=[COLOR_TOKENS['up' if v > 0 else 'down' if v < 0 else 'benchmark'] for v in shown[value]], width=.38,
         text=[format(v, fmt) for v in shown[value]], textposition='outside', cliponaxis=False,
         hovertemplate='%{y}<br>%{x:'+fmt+'}<extra></extra>'))
     style_chart(fig, title=title, height=max(220, min(760, 135 + 38 * len(shown))), revision=revision)
@@ -208,6 +208,30 @@ def build_metric_bars(frame: pd.DataFrame, *, category: str, value: str,
         lo, hi = min(0, shown[value].min()), max(0, shown[value].max())
         pad = (hi-lo)*.16 or .01
         fig.update_xaxes(range=[lo-pad, hi+pad])
+    return fig
+
+
+def build_contribution_waterfall(components: pd.DataFrame, *, revision: str) -> go.Figure:
+    """Add up the existing linked return contributions on the same return scale."""
+    shown = components.loc[components['contribution'].ne(0)]
+    values = shown['contribution'].tolist()
+    labels = ['≈0%' if 0 < abs(value) < .00005 else f'{value:+.2%}'
+              for value in [*values, sum(values)]]
+    fig = go.Figure(go.Waterfall(
+        x=[*shown['label'], '组合收益'], y=[*values, 0],
+        measure=['relative'] * len(values) + ['total'],
+        text=labels, textposition='outside',
+        customdata=[*values, sum(values)],
+        hovertemplate='%{x}<br>%{customdata:+.4%}<extra></extra>',
+        increasing=dict(marker=dict(color=COLOR_TOKENS['up'])),
+        decreasing=dict(marker=dict(color=COLOR_TOKENS['down'])),
+        totals=dict(marker=dict(color=COLOR_TOKENS['primary'])),
+        connector=dict(line=dict(color=COLOR_TOKENS['benchmark'], width=1)),
+    ))
+    style_chart(fig, title='组合收益分解', height=350, revision=revision)
+    fig.update_layout(showlegend=False, hovermode='closest', margin=dict(l=20, r=55, t=65, b=58))
+    fig.update_xaxes(type='category', showspikes=False)
+    fig.update_yaxes(side='right', tickformat='.1%', zeroline=True, rangemode='tozero')
     return fig
 
 

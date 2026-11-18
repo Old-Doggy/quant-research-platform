@@ -32,7 +32,7 @@ def render_data_workspace_body(route_state: Any, *, app_globals: Mapping[str, An
     bind_workspace_dependencies(module_globals, app_globals, _DATA_GLOBALS)
 
     """Render the data workflow while keeping existing analysis views available."""
-    st.title("数据中心 / Data Center")
+    st.title("数据中心")
     st.caption("更新行情、核对覆盖与来源，或导入本地研究数据。")
     if not PUBLIC_MODE:
         from .data_service_view import render_data_service

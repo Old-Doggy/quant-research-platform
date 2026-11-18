@@ -15,6 +15,24 @@ def number(value: object) -> float | None:
     return value if math.isfinite(value) else None
 
 
+def price_precision(value: object) -> int:
+    """Display small adjusted prices without rounding a positive value to zero."""
+    price = number(value)
+    if price is None or price == 0:
+        return 2
+    magnitude = abs(price)
+    if magnitude >= 1:
+        return 2
+    if magnitude >= .1:
+        return 3
+    return max(4, min(16, math.ceil(-math.log10(magnitude))))
+
+
+def format_quote_price(value: object, precision: int | None = None) -> str:
+    price = number(value)
+    return '—' if price is None else f'{price:,.{price_precision(price) if precision is None else precision}f}'
+
+
 def quote_previous_closes(frame: pd.DataFrame) -> pd.Series:
     """Respect explicit upstream gaps; legacy fallback is per security only."""
     previous = pd.to_numeric(
@@ -63,8 +81,7 @@ def build_stock_quote_table(frame: pd.DataFrame, *, limit: int = 12) -> pd.DataF
     data = data.tail(max(1, int(limit)))
     table = pd.DataFrame({"日期": pd.to_datetime(data["trade_date"]).dt.strftime("%Y-%m-%d")})
     for key, label in (("open", "开盘"), ("high", "最高"), ("low", "最低"), ("close", "收盘")):
-        # Display precision must not turn a positive adjusted quote into zero.
-        table[label] = pd.to_numeric(data[key], errors="coerce").round(6)
+        table[label] = pd.to_numeric(data[key], errors="coerce")
     table["涨跌幅"] = data["_change"].map(lambda v: f"{v:+.2%}" if pd.notna(v) else "--")
     for key, label in (("vol", "成交量"), ("amount", "成交额"), ("turnover_rate", "换手率")):
         values = data.get(key, pd.Series(float("nan"), index=data.index))

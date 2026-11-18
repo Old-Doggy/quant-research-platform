@@ -456,6 +456,7 @@ def _render_pure_stock_view(
     volume_unit: str,
     indicator_config: list[dict[str, object]],
     panel_count: int,
+    details_container=None,
 ) -> None:
     """Render historical quotes before any strategy research is submitted."""
     if build_data_quality_report(frame)['status'] != '通过':
@@ -471,17 +472,19 @@ def _render_pure_stock_view(
     if daily_view["status"] != "READY":
         st.info(str(daily_view["message"]))
         return
-    st.subheader(f"{name} {symbol}".strip())
     available_dates = pd.to_datetime(frame["trade_date"], errors="coerce").dropna()
     if available_dates.empty:
         st.info("当前数据没有可用交易日期。")
         return
-    period_column, date_column = st.columns([1, 2])
+    quote_slot = st.empty()
+    with st.container(key='watch_chart_controls'):
+        period_column, date_column = st.columns([1, 2])
     period = period_column.selectbox(
         "行情周期",
         ["1d", "1w", "1m"],
         format_func={"1d": "日K", "1w": "周K", "1m": "月K"}.get,
         key=f"market_period_{symbol}", filter_mode=None,
+        label_visibility='collapsed',
     )
     actual = st.session_state.get('_actual_context_watch')
     if actual:
@@ -492,6 +495,7 @@ def _render_pure_stock_view(
         min_value=available_dates.min().date(),
         max_value=available_dates.max().date(),
         key=f"market_date_range_{symbol}_{frame.attrs.get('snapshot', {}).get('snapshot_id', 'legacy')}",
+        label_visibility='collapsed',
     )
     if not isinstance(market_dates, tuple) or len(market_dates) != 2:
         st.info("请选择完整的行情起止日期。")
@@ -509,25 +513,29 @@ def _render_pure_stock_view(
     if actual:
         actual['as_of'] = str(market_window['window']['end'])[:10]
     incomplete = int((~display_frame["is_complete"].astype(bool)).sum()) if "is_complete" in display_frame else 0
-    period_label = {"1d": "日K", "1w": "周K", "1m": "月K"}[period]
-    st.caption(f"{period_label} · {market_window['window']['start']} — {market_window['window']['end']}")
     latest = display_frame.iloc[-1]
     close = number(latest.get("close"))
     from portfolio_app.stock_view import quote_previous_closes
     previous = number(quote_previous_closes(display_frame).iloc[-1])
-    quote = {
-        "close": close,
-        "previous_close": previous,
-        "change": close / previous - 1 if close is not None and previous not in (None, 0) else None,
-        "high": number(latest.get("high")),
-        "low": number(latest.get("low")),
-    }
-    quote_columns = st.columns(5)
-    quote_columns[0].metric("最近收盘", format_metric(quote["close"]))
-    quote_columns[1].metric("前收", format_metric(quote["previous_close"]))
-    quote_columns[2].metric("涨跌幅", format_metric(quote["change"], True))
-    quote_columns[3].metric("最高", format_metric(quote["high"]))
-    quote_columns[4].metric("最低", format_metric(quote["low"]))
+    from html import escape
+    from portfolio_app.stock_view import format_quote_price, price_precision
+    precision = price_precision(display_frame['low'].min())
+    change = close / previous - 1 if close is not None and previous not in (None, 0) else None
+    direction = 'up' if change is not None and change > 0 else 'down' if change is not None and change < 0 else 'flat'
+    change_text = f'{change:+.2%}' if change is not None else '—'
+    period_name = {'1d': '当日', '1w': '当周', '1m': '当月'}[period]
+    qty = number(latest.get('vol', latest.get('volume')))
+    fields = [(period_name + label, format_quote_price(latest.get(key), precision))
+              for key, label in (('open', '开'), ('high', '高'), ('low', '低'))]
+    fields += [('前' + period_name[-1] + '收盘', format_quote_price(previous, precision)),
+               ('成交量', f'{qty:,.0f}' if qty is not None else '—')]
+    quote_slot.html(f'''<section class="quant-quote" aria-label="最新行情">
+      <div class="quant-quote-main"><div><h2>{escape(f'{name} {symbol}'.strip())}</h2>
+      <span>{escape(source_label)} · {pd.Timestamp(latest.trade_date):%Y-%m-%d}</span></div>
+      <div class="quant-quote-value"><strong aria-label="{period_name}收盘">{format_quote_price(close, precision)}</strong>
+      <span class="quant-quote-change {direction}" aria-label="{period_name}涨跌幅">{change_text}</span></div></div>
+      <dl>{''.join(f'<div><dt>{label}</dt><dd>{value}</dd></div>' for label, value in fields)}</dl>
+    </section>''')
     payload = build_ohlcv_payload(
         display_frame,
         symbol=symbol,
@@ -543,22 +551,22 @@ def _render_pure_stock_view(
             volume_unit=volume_unit, as_of=market_window["window"]["end"],
         ),
     )
-    chart_height = 520 + 126 * panel_count
+    chart_height = 430 + 108 * panel_count
     from .chart_component import render_interactive_chart
     selection = render_interactive_chart(payload, height=chart_height, key='watch_price')
     if selection:
         picked = display_frame.loc[pd.to_datetime(display_frame['trade_date']).dt.strftime('%Y-%m-%d').eq(selection['date'])]
         if not picked.empty:
             selected_bar = picked.iloc[0]
-            st.caption(f"图上选择 {selection['date']} · 收盘 {format_metric(number(selected_bar.get('close')))}")
-    st.caption(f"{market_window['bars']:,} 根{period_label}" + (f" · {incomplete} 个周期未完成" if incomplete else ''))
-    st.subheader("最近行情")
+            st.caption(f"图上选择 {selection['date']} · 收盘 {format_quote_price(selected_bar.get('close'), precision)}")
     table = build_stock_quote_table(display_frame)
     if incomplete:
         visible_status = display_frame["is_complete"].tail(len(table)).tolist()
         table.insert(0, "周期状态", ["未完成" if not bool(value) else "完整" for value in visible_status])
     from portfolio_app.result_presentations import render_recent_quotes
-    render_recent_quotes(display_frame, key='market_recent_quotes', table=table)
+    with (details_container if details_container is not None else st.container()):
+        st.subheader("最近行情")
+        render_recent_quotes(display_frame, key='market_recent_quotes', table=table, price_precision=precision)
 
 
 from portfolio_app.market_file_cache import cached_local_symbol
@@ -1509,7 +1517,7 @@ def main() -> None:
     # Reserve the status location, then fill it after the workspace has
     # updated its state. This prevents a completed run from being labeled with
     # the status from the previous Streamlit rerun.
-    status_slot = st.empty()
+    status_slot = st.empty() if route_state.active_workspace != 'watch' else None
     st.session_state.pop(f'_actual_context_{route_state.active_workspace}', None)
     if (route_state.active_workspace in {'factors','strategy','portfolio'}
             and (route_state.context.universe_id or '').startswith('screen-')):
@@ -1558,7 +1566,7 @@ def main() -> None:
 
     render_context_status_bar(
         route_state,
-        container=status_slot,
+        container=status_slot if status_slot is not None else st.container(),
         public_mode=PUBLIC_MODE,
         local_data_available=bool(cached_symbols(str(DEFAULT_DATA_ROOT))),
     )

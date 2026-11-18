@@ -123,6 +123,10 @@ def _render_factor_summary(result, *, show_details=True):
     turnover = summary["turnover"]
     integrity = summary["integrity"]
     st.subheader('因子诊断概览')
+    ic_rows = pd.DataFrame(result['analysis']['ic_series'])
+    per_date = ic_rows.loc[ic_rows['ic'].notna(), 'valid_n'] if {'ic', 'valid_n'} <= set(ic_rows) else pd.Series(dtype=int)
+    if not per_date.empty and per_date.lt(20).any():
+        st.caption(f"有效截面每期 {per_date.min():.0f}–{per_date.max():.0f} 只证券。少于 20 只的截面仅作描述。")
     metric_row = st.columns(4)
     metric_row[0].metric('有效交易日', format_count(ic['valid_sessions']))
     metric_row[1].metric('IC 均值', _factor_metric(ic['mean'], lambda value: f'{value:.4f}'))
@@ -227,7 +231,7 @@ def _render_factor_research(frame, *, public_mode):
             st.session_state['factor_research_current'] = (identity, computed)
         saved = st.session_state.get('factor_research_current')
         if not saved:
-            st.info('选择因子，点击“运行因子研究”。')
+            st.caption('选择因子后运行，结果将在此显示。')
             return
         if saved[0] != identity or task.get('status') in {'failed', 'cancelled'}:
             if saved[0] != identity:
@@ -249,7 +253,7 @@ def _render_factor_research(frame, *, public_mode):
                 render_ic_drilldown(result)
             turnover_rows = pd.DataFrame(result['analysis']['turnover']['rows'])
             if not turnover_rows.empty and 'turnover' in turnover_rows:
-                st.subheader('高分组成员变化')
+                st.subheader('高分组成员退出比例')
                 turnover_fig = build_turnover_chart(turnover_rows, revision=result['run_id'])
                 st.plotly_chart(turnover_fig, width='stretch', config=CHART_CONFIG)
                 autocorrelation_text = _factor_metric(summary['turnover']['rank_autocorrelation'], lambda value: f'{value:.4f}')
@@ -265,11 +269,15 @@ def _render_factor_research(frame, *, public_mode):
             if not groups.empty and {'factor_quantile', 'cumulative_return'}.issubset(groups.columns):
                 group_figure = go.Figure()
                 descriptive_groups = groups.loc[groups['portfolio_type'].ne('long_short_daily_spread')] if 'portfolio_type' in groups else groups
-                group_colors = ['#A9B9CF', '#7C91AF', '#526C93', '#14949B', '#2864D7']
+                from .design_tokens import COLOR_TOKENS
+                group_colors = [COLOR_TOKENS[k] for k in ('benchmark', 'purple', 'research', 'primary')]
+                group_count = descriptive_groups.factor_quantile.nunique()
                 for index, (quantile, group) in enumerate(descriptive_groups.groupby('factor_quantile', sort=True)):
                     group = envelope_sample(group, value='cumulative_return')
                     group_figure.add_trace(go.Scatter(x=group.trade_date, y=group.cumulative_return, name=f'第 {int(quantile)} 组', mode='lines', connectgaps=False,
-                        line=dict(color='#2864D7' if index == descriptive_groups.factor_quantile.nunique()-1 else group_colors[index % len(group_colors)], width=2 if index in {0,4} else 1.6)))
+                        line=dict(color=COLOR_TOKENS['primary'] if index == group_count-1 else group_colors[index % (len(group_colors)-1)],
+                                  width=2.3 if index == group_count-1 else 1.7,
+                                  dash='solid' if index == group_count-1 else ('dash', 'dot', 'dashdot')[index % 3])))
                 spread = groups[groups.get('portfolio_type', '') == 'long_short_daily_spread'] if 'portfolio_type' in groups else pd.DataFrame()
                 if not spread.empty:
                     spread = envelope_sample(spread, value='cumulative_return')

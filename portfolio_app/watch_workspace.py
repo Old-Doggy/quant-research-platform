@@ -46,6 +46,7 @@ def _render_watch_workspace_body(route_state: Any, *, app_globals: Mapping[str, 
     from .market_watch import render_market_watch
     if render_market_watch(route_state, app_globals):
         return
+    quote_slot = st.empty()
     from .research_dataset import selected_dataset, record_context
     registered_frame = selected_dataset(st.session_state, lambda: None)
     route_symbol = route_state.context.symbol
@@ -191,7 +192,6 @@ def _render_watch_workspace_body(route_state: Any, *, app_globals: Mapping[str, 
         selected_symbols = st.multiselect("示例标的", demo_symbols, default=demo_symbols, key="demo_symbols", filter_mode=None) if analysis_mode == "等权组合" else demo_symbols[:1]
         symbol = selected_symbols[0] if selected_symbols else "未选择"
         portfolio_cash_weight = st.number_input("组合现金权重", min_value=0.0, max_value=1.0, value=0.0, step=0.05, key="demo_portfolio_cash_weight") if analysis_mode == "等权组合" else 0.0
-        st.caption("合成示例 · 非真实证券数据")
     elif uploaded is not None:
         try:
             frame = render_import_preview(uploaded, key="dashboard")
@@ -344,6 +344,7 @@ def _render_watch_workspace_body(route_state: Any, *, app_globals: Mapping[str, 
             st.caption(blocked[0]['message'])
             st.caption(blocked[0]['action'])
         start_dashboard = st.button("提交研究", type="primary", key="submit_dashboard_research", width="stretch", disabled=bool(blocked))
+    recent_quotes = st.container()
     def compute_research(token) -> dict[str, object]:
         token.report(.05, "preflight")
         if analysis_mode == "等权组合":
@@ -435,17 +436,19 @@ def _render_watch_workspace_body(route_state: Any, *, app_globals: Mapping[str, 
             render_paged_table(old_frame, key='dashboard_previous_detail')
             return
         if analysis_mode == "单股":
-            _render_pure_stock_view(
-                frame,
-                symbol=str(symbol),
-                name=stock_names.get(str(symbol), "") if data_source == "本地行情" else "",
-                source_label={"合成示例": "合成示例行情", "文件导入": "用户导入数据", "本地行情": "本地历史行情"}.get(data_source, "离线行情"),
-                price_mode=adjusted if data_source == "本地行情" else ("imported" if data_source == "文件导入" else "synthetic"),
-                price_unit="unknown",
-                volume_unit="unknown",
-                indicator_config=registry_indicator_config,
-                panel_count=len(registry_panel_keys),
-            )
+            with quote_slot.container():
+                _render_pure_stock_view(
+                    frame,
+                    symbol=str(symbol),
+                    name=stock_names.get(str(symbol), "") if data_source == "本地行情" else "",
+                    source_label={"合成示例": "合成示例行情", "文件导入": "用户导入数据", "本地行情": "本地历史行情"}.get(data_source, "离线行情"),
+                    price_mode=adjusted if data_source == "本地行情" else ("imported" if data_source == "文件导入" else "synthetic"),
+                    price_unit="unknown",
+                    volume_unit="unknown",
+                    indicator_config=registry_indicator_config,
+                    panel_count=len(registry_panel_keys),
+                    details_container=recent_quotes,
+                )
         else:
             st.subheader("组合行情数据")
             display_frame = frame.tail(30).copy()

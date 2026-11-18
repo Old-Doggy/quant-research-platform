@@ -85,7 +85,7 @@ def _render_single_strategy_result_payload(
     summary_columns = st.columns(4)
     for column, label, key in zip(
         summary_columns,
-        ("区间收益", "最大回撤", "交易次数", "总成本"),
+        ("区间收益", "最大回撤", "模拟成交次数", "累计成本率"),
         ("total_return", "max_drawdown", "trades", "total_cost"),
     ):
         value = summary.get(key)
@@ -531,5 +531,4 @@ def _render_explicit_research_workspace(route_state) -> None:
         elif state.status is RunStatus.FAILED:
             st.error(f"本次研究失败：{state.error}")
         else:
-            st.html('<div class="quant-empty"><strong>查看策略表现</strong>'
-                '选择标的与策略，点击“运行研究”。</div>')
+            st.caption('选择标的与策略后运行，结果将在此显示。')

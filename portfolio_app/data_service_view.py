@@ -113,8 +113,10 @@ def _render_update(store):
 
 def render_data_service():
     record_service_context()
-    update, coverage, sources, financial, etf, convertible, imports = st.tabs(
-        ['更新', '覆盖与版本', '来源', '财务', 'ETF', '可转债', '文件导入'], key='data_service_tab', on_change='rerun')
+    labels = ['更新', '覆盖与版本', '来源', '财务', '文件导入']
+    if st.session_state.get('data_service_tab') in {'ETF', '可转债'}:
+        st.session_state['data_service_tab'] = '覆盖与版本'
+    update, coverage, sources, financial, imports = st.tabs(labels, key='data_service_tab', on_change='rerun')
     if update.open:
         with update:
             _render_update(SnapshotStore(market_service_root()))
@@ -129,12 +131,4 @@ def render_data_service():
         with financial:
             from .financial_view import render_financial_data
             render_financial_data()
-    if etf.open:
-        with etf:
-            from .etf_view import render_etf_data
-            render_etf_data()
-    if convertible.open:
-        with convertible:
-            from .convertible_view import render_convertible_data
-            render_convertible_data()
     return imports if imports.open else None

@@ -13,11 +13,11 @@ def apply_workbench_theme() -> None:
     # Default styling also reaches evidence charts without altering their data.
     template = go.layout.Template(pio.templates['plotly_white'])
     template.layout.update(font=dict(family=FONT, size=FONT_SIZE_TOKENS['chart'], color=COLOR_TOKENS['text']),
-        colorway=list(PALETTE), paper_bgcolor='#FFFFFF', plot_bgcolor='#FFFFFF',
+        colorway=list(PALETTE), paper_bgcolor=COLOR_TOKENS['surface'], plot_bgcolor=COLOR_TOKENS['surface'],
         hoverlabel=dict(font=dict(family=FONT, size=14)),
         xaxis=dict(tickfont=dict(size=14), title=dict(font=dict(size=14)), automargin=True),
         yaxis=dict(tickfont=dict(size=14), title=dict(font=dict(size=14)), automargin=True,
-                   gridcolor='#E4EAF2'))
+                   gridcolor=COLOR_TOKENS['grid']))
     pio.templates['quant_research'] = template
     pio.templates.default = 'quant_research'
     st.html('<style>'+css_variables()+'\n'+Path(__file__).with_name('workbench_theme.css').read_text(encoding='utf-8')+'</style>')

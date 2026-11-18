@@ -2,10 +2,12 @@
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
+from html import escape
 
 from .design_tokens import COLOR_TOKENS
 from .research_charts import CHART_CONFIG,style_chart
 from .research_display import envelope_sample
+from .stock_view import format_quote_price
 
 
 def event_chart(performance,trades,*,revision):
@@ -35,7 +37,7 @@ def event_chart(performance,trades,*,revision):
                 continue
             price=row.get('价格')
             custom.append([int(index),row['信号日期'],row['状态'],
-                '—' if pd.isna(price) else f'{price:,.4f}',row.get('原因',''),row['方向']])
+                format_quote_price(price),row.get('原因',''),row['方向']])
             dates.append(date);values.append(value)
         if dates:
             fig.add_trace(go.Scatter(x=dates,y=values,name=label,mode='markers',customdata=custom,
@@ -82,12 +84,13 @@ def render_strategy_events(performance,trades,*,revision):
         st.dataframe(trades,hide_index=True,width='stretch')
     index=st.selectbox('查看买卖事件',list(range(len(trades))),filter_mode=None,key=pick,
         format_func=lambda i:f"{i+1} · {trades.iloc[i]['执行日期']} · {trades.iloc[i]['方向']} · {trades.iloc[i]['状态']}")
-    row=trades.iloc[index];a,b,c=st.columns(3)
-    a.metric('执行状态',row['状态']);price=row.get('价格')
-    b.metric('执行价','—' if pd.isna(price) else f'{price:,.4f}')
-    c.metric('信号日期',str(row['信号日期']))
-    st.caption(f"{row['标的']} · {row['方向']} · {row.get('原因','—')}")
-    st.caption('单股模板按持仓比例计算收益；事件数量为单位化记录。')
-    st.dataframe(trades.iloc[[index]],hide_index=True,width='stretch')
+    row = trades.iloc[index]
+    fields = [(label, format_quote_price(value) if label == '价格' else '—' if pd.isna(value) else str(value))
+              for label, value in row.items() if label != '原因']
+    st.html('<dl class="quant-inline-details" aria-label="事件详情">' + ''.join(
+        f'<div><dt>{escape(label)}</dt><dd>{escape(value)}</dd></div>' for label, value in fields
+    ) + '</dl>')
+    if pd.notna(row.get('原因')) and row.get('原因'):
+        st.caption(str(row['原因']))
     st.download_button('下载买卖事件',trades.to_csv(index=False).encode('utf-8-sig'),
         'strategy-events.csv','text/csv',key='strategy_event_csv')
