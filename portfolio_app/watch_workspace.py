@@ -908,11 +908,9 @@ def _render_watch_workspace_body(route_state: Any, *, app_globals: Mapping[str, 
             ):
                 st.write(f"• {limitation}")
     with projects_tab:
-        st.subheader("研究项目目录")
-        st.caption("这些项目来自仓库中的模型、回测和研究文档，展示平台只读呈现研究成果。")
-        st.caption("可交互运行：本页单股与等权组合策略；研究项目卡：模型研究方法、验证证据与简历表述。")
-        for card in build_strategy_showcases(REPO_ROOT, public_only=PUBLIC_MODE):
-            render_strategy_showcase_card(card)
+        from .project_dossier_view import render_project_dossiers
+        render_project_dossiers(REPO_ROOT, language=st.session_state.get('app_language', 'zh'),
+                                local_results=True, embedded=True)
     with data_tab:
         st.write("标准字段已识别，可继续导入自己的日线文件进行同样分析。")
         if analysis_mode == "等权组合":

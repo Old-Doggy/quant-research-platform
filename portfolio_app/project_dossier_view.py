@@ -13,12 +13,15 @@ from portfolio_app.project_materials_view import render_project_artifacts
 from portfolio_app.model_explanation_view import render_model_section
 
 
-def render_project_dossiers(project_root, *, language="zh", local_results=False):
+def render_project_dossiers(project_root, *, language="zh", local_results=False, embedded=False):
     records = build_project_dossiers(project_root, language=language)
     zh = language == "zh"
-    st.html('''<style>
+    layout_style = '' if embedded else '''
     [data-testid="stMainBlockContainer"]{max-width:1300px;padding-top:2.7rem;}
     [data-testid="stMainBlockContainer"] h1{font-size:1.7rem;}
+    @media(max-width:640px){[data-testid="stMainBlockContainer"]{padding:2.5rem 1rem 1rem;}}
+    '''
+    st.html('<style>' + layout_style + '''
     .dossier-card{border:1px solid #dfe5ec;border-radius:10px;padding:15px 17px;margin-bottom:12px;background:#fff;overflow-wrap:anywhere;}
     .dossier-card h3{font-size:1rem;line-height:1.55;margin:6px 0 9px;color:#172b40;}
     .dossier-card p{font-size:.86rem;line-height:1.65;margin:7px 0;color:#45566a;}
@@ -28,7 +31,7 @@ def render_project_dossiers(project_root, *, language="zh", local_results=False)
     .dossier-status.unavailable{background:#eef0f3;color:#566070;}
     [data-testid="stMainBlockContainer"] [data-testid="stMarkdownContainer"] p{line-height:1.75;}
     [data-testid="stMainBlockContainer"] [data-testid="stCaptionContainer"]{overflow-wrap:anywhere;}
-    @media(max-width:640px){[data-testid="stMainBlockContainer"]{padding:2.5rem 1rem 1rem;}.dossier-card{padding:12px;}}
+    @media(max-width:640px){.dossier-card{padding:12px;}}
     </style>''')
     st.html('''<style>
     .dossier-card:lang(en){word-break:normal;overflow-wrap:break-word;hyphens:auto;}
@@ -36,7 +39,8 @@ def render_project_dossiers(project_root, *, language="zh", local_results=False)
     .dossier-card h3{font-weight:650;}
     @media(max-width:640px){[data-testid="stMainBlockContainer"] h3{font-size:1.12rem;line-height:1.5;}}
     </style>''')
-    st.title("研究作品与工程实践" if zh else "Research Projects and Engineering Work")
+    heading = st.subheader if embedded else st.title
+    heading("研究作品与工程实践" if zh else "Research Projects and Engineering Work")
     st.caption("模型原理 · 数据与交易时点 · 回测结果" if zh else "Python data analysis · Timing controls · Research validation · Visual delivery")
     def _explain_39():
         st.info("这是一个个人量化研究工作台，用于展示数据工程、研究验证、回测、组合分析和复现能力。公开策略是通用演示模板；历史研究项目的证据状态各不相同。合成数据和历史摘要不代表实时行情、真实账户收益或实盘成交。" if zh else
