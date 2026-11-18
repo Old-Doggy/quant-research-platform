@@ -1,6 +1,82 @@
-# 全平台图表验收台账
+# 精简范围图表验收
 
-更新：2026-11-17（上海时间）。本表记录T56/T57增量，**全平台图表验收尚未通过**。局部真实数据检查、合成研究、静态扫描和浏览器操作分别记录。
+更新：2026-11-18（上海时间），应用候选`bc8d258`。**S12现有功能的工程验收通过；未因此认定不合格真实数据可用于回测。**
+
+## 当前范围与证据
+
+静态扫描64处：61处Plotly、1处正式K线、2处旧HTML图形嵌入。当前路由可达57处，另7处只保留定义，没有路由调用链；入口数不是图形变体数。七工作区与专有布局在1024/1280/1440/1920检查，按冻结计划复用共用布局证据；各族数值由计算/账本/快照测试与实际图/表/CSV核对共同覆盖。
+
+只读选择器以手形、无可见插入符；真实搜索可输入。共享Plotly交互配置、14px图形文字、负值/未知/缺口不补零、下载保留全量均有检查。时间图按用途提供悬停、缩放/平移/重置；选择图保留键盘等价选择控件。静态指标图不强加无意义选择事件。
+
+| 图表族 | 数据与图形核对 | 操作与布局证据 |
+|---|---|---|
+| 正式K线及旧看盘 | 两真实证券6条OHLC/成交量逐点；来源昨收缺失、周/月口径；300日长图指标预热及四预设；旧等权286共同会话/41行排除 | 三面板十字线/同范围、鼠标平移缩放、键盘全部/重置、四宽度；旧单股六页签/组合两图页与研究项目嵌入 |
+| 数据覆盖/导入/观察 | 覆盖热图、价格、财务累计/单季/TTM及资产存量；两证券216项独立换算；ETF三批207行CSV与原观察及独立价格指数/回撤换算一致；转债价量/转股价 | 数据中心六页签四宽度；观察表格/图形、证券选择、财务单项和下载；来源空态不造图 |
+| 市场概览/筛选 | 固定真实两证券散点与查询坐标；涨跌分布及筛选数量；图/表/下载同源 | 证券选择/筛选保存及重开；完整池发送、来源再次核验；缺真实行业/财务数据保持禁用 |
+| 因子诊断/比较/排名策略 | Rank IC和平均排名、季度有效样本、换手/分组标签；缺相关性不变零；两类相关性与共同样本；80日排名策略净值/回撤/现金/暴露读同一账本 | IC实际点击与日期选择、季度图/表；矩阵点击与因子对选择；单/多因子及排名策略专有布局四宽度；执行设置确认有键盘操作 |
+| 单股策略/固定时间诊断 | 300净值点/24成交事件及CSV；成本合计与原结果、时间切分和参数/负对照负值；独立窗不拼连续账户 | 事件点击/分页/选择，四主视图；验证三页签四宽度、参数和成本键盘选择、Space切表；缺财务资格不运行质量策略 |
+| 组合 | 同账户现金/费用、出入金TWR与贡献；历史持仓/暴露日期；订单/拒单、流动性容量及极值/缺口采样 | 四主视图按需构图，日期/订单点击及选择、分页/表格/下载；1024–1920；真实成交额只作已有容量观察 |
+| 实验/历史/运行核对 | 保存结果曲线、IC、最多4项比较、收益回撤散点，版本及原日期保留；ZIP恢复复算；旧实验300日净值复算一致 | 散点实际点击打开/下拉选择原结果；搜索/空态/损坏记录隔离；旧实验最终专属标题后四宽度复核；运行指标/变化表保留缺值 |
+| 作品/看盘内研究项目 | 11历史曲线16224点与公开源SHA256及CSV一致；七模型42页签/21专属解释/8产物；28二级视图与成本/年度数据 | 模型/情景键盘选择、图/表/CSV；模型1/6/2实际图例隐藏恢复/缩放重置，嵌入四宽度；成本悬停/年度77日部分年斜纹；模型2/6原未通过状态保留 |
+
+本批关键原始证据保存在本机`output/closeout/chart-final-acceptance.json`，逐静态位置列来源文件/函数、图表族、测试和浏览器证据。私人原始行情和截图日志不随公开仓库上传。数值容差沿用既有1e-12图/表/CSV或对应结果合同，不用视觉相似替代数据校验。
+
+## 当前可达位置
+
+下表按文件/函数登记源代码位置；行号可能随说明修改移动，以函数名检索。可达性来自路由及调用链审阅，运行图形按上述图表族验收，不把静态扫描标记当作浏览器通过。
+
+| 文件 | 函数 | 静态位置数 | 结论 |
+|---|---|---:|---|
+| `portfolio_app/convertible_view.py` | `render_convertible_data` | 2 | 固定范围通过 |
+| `portfolio_app/data_coverage_view.py` | `render_coverage` | 2 | 固定范围通过 |
+| `portfolio_app/data_workspace.py` | `_render_import_workflow` | 1 | 固定范围通过 |
+| `portfolio_app/etf_view.py` | `render_etf_data` | 1 | 固定范围通过 |
+| `portfolio_app/experiment_catalog_view.py` | `render_experiment_scatter` | 1 | 固定范围通过 |
+| `portfolio_app/experiment_view.py` | `render_experiments` | 1 | 固定范围通过 |
+| `portfolio_app/factor_comparison_view.py` | `render_factor_comparison` | 2 | 固定范围通过 |
+| `portfolio_app/factor_drilldown_view.py` | `render_ic_drilldown` | 3 | 固定范围通过 |
+| `portfolio_app/factor_rank_strategy_view.py` | `render_factor_strategy` | 2 | 固定范围通过 |
+| `portfolio_app/factor_research_view.py` | `_render_factor_research` | 2 | 固定范围通过 |
+| `portfolio_app/financial_view.py` | `render_financial_data` | 1 | 固定范围通过 |
+| `portfolio_app/local_app.py` | `_render_research_result_view` | 1 | 无当前路由调用 |
+| `portfolio_app/local_app.py` | `render_strategy_showcase_card` | 2 | 无当前路由调用 |
+| `portfolio_app/local_app.py` | `_render_pure_stock_view` | 1 | 固定范围通过 |
+| `portfolio_app/local_app.py` | `render_model_evidence` | 1 | 无当前路由调用 |
+| `portfolio_app/local_app.py` | `render_portfolio_home` | 1 | 无当前路由调用 |
+| `portfolio_app/local_app.py` | `render_model_comparison` | 1 | 无当前路由调用 |
+| `portfolio_app/local_app.py` | `render_data_analysis` | 1 | 无当前路由调用 |
+| `portfolio_app/market_overview_view.py` | `render_market_overview` | 2 | 固定范围通过 |
+| `portfolio_app/portfolio_capacity_view.py` | `render_capacity` | 1 | 固定范围通过 |
+| `portfolio_app/portfolio_order_view.py` | `render_orders` | 1 | 固定范围通过 |
+| `portfolio_app/portfolio_workspace_view.py` | `_render_portfolio_workspace` | 7 | 固定范围通过 |
+| `portfolio_app/project_evidence_view.py` | `_render_comparison` | 1 | 固定范围通过 |
+| `portfolio_app/project_evidence_view.py` | `render_project_evidence` | 1 | 固定范围通过 |
+| `portfolio_app/research_audit_view.py` | `render_run_comparison` | 1 | 固定范围通过 |
+| `portfolio_app/research_workspace.py` | `_render_single_strategy_result_payload` | 2 | 固定范围通过 |
+| `portfolio_app/result_comparison_view.py` | `render_result_comparison` | 1 | 固定范围通过 |
+| `portfolio_app/result_history_view.py` | `render_result_history` | 2 | 固定范围通过 |
+| `portfolio_app/result_presentations.py` | `render_recent_quotes` | 1 | 固定范围通过 |
+| `portfolio_app/result_presentations.py` | `render_validation_results` | 1 | 固定范围通过 |
+| `portfolio_app/screener_view.py` | `render_screener` | 2 | 固定范围通过 |
+| `portfolio_app/strategy_cost_view.py` | `render_strategy_costs` | 1 | 固定范围通过 |
+| `portfolio_app/strategy_event_view.py` | `render_strategy_events` | 1 | 固定范围通过 |
+| `portfolio_app/validation_view.py` | `render_timeline` | 1 | 固定范围通过 |
+| `portfolio_app/validation_view.py` | `render_parameter_selection` | 1 | 固定范围通过 |
+| `portfolio_app/watch_workspace.py` | `_render_watch_workspace_body` | 11 | 固定范围通过 |
+
+## 适用边界
+
+真实研究资格不足的图以明确合成输入验机制和布局；真实观察图以保存的真实批次验数据，授权作品以原历史汇总验曲线。三类证据不互相替代。全市场历史、完整财务PIT/行业、ETF/转债完整引擎等已延期或取消，不属于此S12通过结论。
+
+有些浏览器自动化初版读到了切换前DOM，或按虚拟列表第11项/隐藏input点击失败；这些记录排除。旧实验图的前序“accepted”脚本仍读到运行比较旧图，其该行无效，由`legacy-experiment-final.txt`等待“已保存实验”专属标题后的300点/四宽度结果替代。其他图等待模型/系列身份、目标控件及calcdata后取证。没有为使脚本通过改写数据。
+
+本次合格图冻结；后续只有数据/交互缺陷或共享样式变化才重验受影响项，不继续扩展图形种类。全量本地/干净归档/远端四组1053项均通过，真实连续运行仍1/10。当前总状态见[状态报告](status-v2.md)。
+
+---
+
+# 图表验收历史记录
+
+以下保留各批检查当时的结论和待办；已补验项目以本文页首当前结论为准，取消/延期仍不是通过。
 
 ## 覆盖清单
 
@@ -51,3 +127,12 @@
 T40/T56财务图形增量：四项概览与单指标切换，流量用柱图、总资产用期末折线；缺数不连线/不补零，整项无数值标注，选中范围无报告期不渲染空图。更新表单收起，范围/口径/图表选择并排，给图形保留首屏空间；选择器只选。图表revision纳入实际观察表/模式，切数据不保留旧轴。19项相关检查通过（2.86秒）；完整1039项通过（103.45秒），同一既有日期警告；随后布局调整19项通过（2.76秒）。
 
 使用已保存新浪600000.SH九期四指标，累计/单季/TTM共108实际图点及缺口与观察表换算一致；总资产不作累计差分；36行TTM浏览器下载与观察转换表逐列一致1e-12。真实独立组件页1024/1280/1440/1920无溢出/应用异常，单指标总资产与表格切换通过；不是完整数据中心所有操作已验收。采集入口/存储/财务计算未改，仍属最新观察浏览，不升级历史PIT能力。证据output/financial-refined-acceptance.json、output/verify_financial_refined.js；截图output/playwright/m3-financial-refined-1280.png、m3-financial-assets-refined.png。
+
+
+## 2026-11-18精简范围增量
+
+正式看盘组件：generation 2两证券6条真实OHLC与成交量逐点一致，三面板、详情量纲正确；两证券各1024/1280/1440/1920无横向溢出/应用异常，Enter选择“全部”及详情开关通过。证据`output/closeout/kline-acceptance.json`。报价图/表/顶部/catalog统一保留来源昨收未知，周/月不造昨收，legacy fallback不跨证券；新增回归及全量1052项通过。长区间全部指标、缩放和旧入口可达性仍需关账。
+
+作品：28个二级视图实际等待模型及目标内容后打开，无应用异常；模型5/6成本图与表格键盘Space切换、下载及四宽度补验；图点年化收益为20.70220209%/18.84860225%与21.81586141%/15.21067299%，CSV两行数值及日期同源，模型6悬停显示21.82%。原研究未通过状态保留。11曲线16224行、42说明页签和8份产物下载证据继续复用。剩余图内缩放/重置/图例与其余模板键盘验收不因测试数通过而自动关闭。
+
+全市场/历史行业/财务因子和新增品种研究不再属于S12交付；保留的图表仍需数据正确。静态入口64不是运行验收数量，不将缺真实合格输入的研究图认定为真实研究验收。

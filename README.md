@@ -4,7 +4,7 @@
 
 Python · Streamlit · Plotly · Lightweight Charts
 
-下一版开发进度：[M0–M5 状态报告](docs/status-v2.md) · [验收记录](docs/acceptance-v2.md)
+开发分支：精简范围工程验收已完成，连续交易日观察中。[当前状态](docs/status-v2.md) · [验收记录](docs/acceptance-v2.md)
 
 ![行情与研究](docs/images/watch.png)
 
@@ -43,9 +43,11 @@ python -m streamlit run streamlit_app.py --server.address 127.0.0.1
 
 ## 数据
 
-仓库附带合成样例及作者授权公开的历史研究汇总，不附带真实行情库。真实行情可从数据服务商获取后导入，项目提供一个 Tushare 日线下载脚本。
+仓库附带合成样例及作者授权公开的历史研究汇总，不附带真实行情库。真实行情可从有权使用的数据服务商获取后导入。开发分支已有免费日线更新、财务三表和ETF/转债观察入口，另提供Tushare下载脚本。免费日线更新限最多20只沪深股票、单次一年；已有跨源核对范围见[接口记录](docs/provider-coverage.md)。
 
-[数据获取与字段说明](docs/data.md) · [使用指南](docs/usage.md) · [研究计算口径](docs/methodology.md)
+[数据获取与字段说明](docs/data.md) · [使用指南](docs/usage.md) · [研究计算口径](docs/methodology.md) · [更新与运行](docs/operations-v2.md) · [备份恢复](docs/recovery-runbook.md)
+
+缺公司行为、交易状态或规则证据的免费快照用于看盘和筛选，相关真实回测保持关闭。没有接口凭据时仍可使用合成示例完成研究、保存和复算。
 
 “作品”中的 11 条净值曲线来自既有历史回测，保留原样本区间与成本情景。模型 2、6 的未通过状态也保留在结果中。这些历史汇总不等于当前行情重跑或实盘收益。
 

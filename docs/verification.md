@@ -1,6 +1,6 @@
 # 测试与版本记录
 
-## 当前版本
+## 首次公开版本记录
 
 2026-11-14，首个完整七工作区公开版本。
 
@@ -45,3 +45,14 @@ GitHub Actions 在 Linux / Windows、Python 3.12 / 3.13 运行同一组回归。
 初次为测试指定的临时目录缺父目录，产生测试准备错误；创建父目录后重跑完整通过，没有据此改应用代码。原开发环境同批1032项通过（99.05秒），成本柱视觉宽度后续通过14项相关检查；全新环境已包含该视觉调整。
 
 本记录仅覆盖Windows/Python 3.12候选环境；未重跑当前分支的远端Linux/Python 3.13流水线，也未安装可选采集SDK。真实源权限、10交易日观察、全平台完整图形与发布门槛仍见[状态报告](status-v2.md)。环境清单保存在本机output/clean-environment-v2.json。
+
+
+## 2026-11-18精简候选工程验收
+
+应用候选`bc8d258`（开发分支，未正式发布）。Windows/Python3.12开发目录1053项通过，103.37秒；同提交Git归档到新目录、不复制原行情或私有研究，使用已独立安装的锁定依赖环境1053项通过，118.31秒，pip check通过。此次复用独立环境，没有声称再次全新安装。
+
+GitHub Actions [44222328694](https://github.com/Old-Doggy/quant-research-platform/actions/runs/44222328694)在ubuntu-latest/windows-latest、Python3.12/3.13四组均完成依赖安装、pip check和1053项测试。保留1项既有无效日期解析警告；没有未解决测试失败。CI不联网获取行情，不验证服务商实际权限。
+
+七工作区、可达图表族、四种布局宽度和必要键盘/点击入口已核对，图/表/CSV及复算容差沿用原合同。真实观察数据与授权作品曲线、合成研究分别记录，见[图表台账](chart-acceptance.md)。副本备份恢复、三类故障与旧版升级回退记录见[恢复说明](recovery-runbook.md)。
+
+原始本地证据为`output/closeout/final-candidate-tests.xml`、`final-clean-bc8d258.xml`和`remote-ci-bc8d258.json`；包含真实观察数据的输出不入库。S06实际交易日仍为1/10，最终发布等待观察结束，见[状态报告](status-v2.md)。
