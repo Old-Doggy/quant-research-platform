@@ -63,6 +63,8 @@ def _import_result(store,data,max_bytes):
         if not all(allowed(n) for n in names): raise ValueError('归档包含未知文件或路径')
         if archive.getinfo('archive.json').file_size>1_000_000: raise ValueError('归档索引过大')
         meta=json.loads(archive.read('archive.json'))
+        if not isinstance(meta, dict) or not isinstance(meta.get('files'), dict):
+            raise ValueError('归档索引结构无效')
         task_id=_identifier(meta['task_id'])
         if (meta.get('schema')!='private-result-archive.v1' or meta.get('disclosure')!='private_local'
                 or set(meta['files'])!=set(names)-{'archive.json'}):

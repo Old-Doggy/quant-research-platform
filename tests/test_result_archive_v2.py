@@ -70,6 +70,26 @@ def test_result_zip_export_budget_and_corruption_are_checked(tmp_path):
     with pytest.raises(ValueError): export_result(source,'portable-run')
 
 
+@pytest.mark.parametrize('field,value', [('files', 'matching_names'), ('files', None), ('task_id', [])])
+def test_malformed_archive_metadata_has_consistent_error_and_no_published_result(tmp_path, field, value):
+    from portfolio_app.result_archive_v2 import export_result, import_result
+    from portfolio_app.result_store import ResultStore
+    source = seed(tmp_path/'source')
+    with ZipFile(BytesIO(export_result(source, 'portable-run'))) as archive:
+        files = {name: archive.read(name) for name in archive.namelist()}
+    meta = json.loads(files['archive.json'])
+    meta[field] = list(meta['files']) if value == 'matching_names' else value
+    files['archive.json'] = json.dumps(meta).encode()
+    buffer = BytesIO()
+    with ZipFile(buffer, 'w') as archive:
+        for name, body in files.items():
+            archive.writestr(name, body)
+    target = ResultStore(tmp_path/'target')
+    with pytest.raises(ValueError):
+        import_result(target, buffer.getvalue())
+    assert target.records() == []
+
+
 def test_history_archive_is_prepared_on_demand_and_empty_store_can_import(tmp_path,monkeypatch):
     from streamlit.testing.v1 import AppTest
     from portfolio_app.result_archive_v2 import export_result
