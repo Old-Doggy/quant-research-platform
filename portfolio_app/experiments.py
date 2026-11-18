@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from io import BytesIO
 import hashlib
 import json
+import math
 from pathlib import Path
 import platform
 import uuid
@@ -103,7 +104,7 @@ def build_experiment(frame: pd.DataFrame, spec: dict, *, name: str = "Research r
     return archive.getvalue()
 
 
-def open_experiment(archive: bytes) -> tuple[dict, pd.DataFrame, pd.DataFrame]:
+def _open_experiment(archive: bytes) -> tuple[dict, pd.DataFrame, pd.DataFrame]:
     if len(archive) > MAX_ARCHIVE_BYTES:
         raise ValueError("experiment archive is too large")
     with zipfile.ZipFile(BytesIO(archive)) as source:
@@ -113,11 +114,43 @@ def open_experiment(archive: bytes) -> tuple[dict, pd.DataFrame, pd.DataFrame]:
             raise ValueError("expanded experiment archive is too large")
         manifest = json.loads(source.read("manifest.json"))
         data, result = source.read("data.csv"), source.read("result.csv")
-    if manifest.get("schema") != 1 or manifest.get("disclosure_mode") != "private_local":
+    if not isinstance(manifest, dict) or manifest.get("schema") != 1 or manifest.get("disclosure_mode") != "private_local":
         raise ValueError("unsupported experiment contract")
     if hashlib.sha256(data).hexdigest() != manifest["data_sha256"] or hashlib.sha256(result).hexdigest() != manifest["result_sha256"]:
         raise ValueError("experiment checksum mismatch")
-    return manifest, _read_csv(data), _read_csv(result)
+    spec, metrics = manifest.get('spec'), manifest.get('metrics')
+    if (not isinstance(spec, dict) or spec.get('mode') not in ('single', 'portfolio')
+            or not isinstance(metrics, dict)
+            or any(not isinstance(manifest.get(key), str) or not manifest[key]
+                   for key in ('id', 'name', 'created_at', 'engine_sha256'))):
+        raise ValueError('invalid experiment metadata')
+    datetime.fromisoformat(manifest['created_at'])
+    for value in (spec.get('transaction_cost'), metrics.get('total_return'), metrics.get('max_drawdown')):
+        if type(value) not in (int, float) or not math.isfinite(value):
+            raise ValueError('invalid experiment metrics or cost')
+    if not 0 <= spec['transaction_cost'] <= 1:
+        raise ValueError('invalid experiment cost')
+    if manifest.get('run_manifest') is not None and not valid_manifest(manifest['run_manifest']):
+        raise ValueError('invalid experiment run manifest')
+    source_frame, result_frame = _read_csv(data), _read_csv(result)
+    if (result_frame.empty or not {'trade_date', 'equity'} <= set(result_frame)
+            or result_frame.trade_date.isna().any() or result_frame.trade_date.duplicated().any()
+            or not result_frame.trade_date.is_monotonic_increasing):
+        raise ValueError('invalid experiment curve dates or columns')
+    equity = pd.to_numeric(result_frame.equity, errors='raise')
+    if not equity.map(math.isfinite).all() or (equity < 0).any():
+        raise ValueError('invalid experiment equity')
+    result_frame['equity'] = equity
+    return manifest, source_frame, result_frame
+
+
+def open_experiment(archive: bytes) -> tuple[dict, pd.DataFrame, pd.DataFrame]:
+    """Validate the complete display boundary before exposing a saved record."""
+    try:
+        return _open_experiment(archive)
+    except (KeyError, TypeError, AttributeError, UnicodeError, RecursionError,
+            zipfile.BadZipFile, NotImplementedError, RuntimeError) as exc:
+        raise ValueError('invalid experiment archive') from exc
 
 
 def reproduce_experiment(archive: bytes) -> pd.DataFrame:
