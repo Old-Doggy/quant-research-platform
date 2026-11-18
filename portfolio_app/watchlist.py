@@ -7,6 +7,9 @@ import os
 import re
 from pathlib import Path
 import tempfile
+import uuid
+
+from .process_lock import process_lock
 
 
 _SYMBOL = re.compile(r"^[A-Za-z0-9_.-]{1,32}$")
@@ -33,7 +36,8 @@ class WatchlistStore:
         self.recent_limit = max(1, int(recent_limit))
         self._symbols: list[str] = []
         self._recent: list[str] = []
-        self._load()
+        with process_lock(self.path.with_suffix('.lock'), wait=True):
+            self._load()
 
     @property
     def symbols(self) -> list[str]:
@@ -46,9 +50,15 @@ class WatchlistStore:
     def _load(self) -> None:
         try:
             payload = json.loads(self.path.read_text(encoding="utf-8"))
-        except (FileNotFoundError, OSError, json.JSONDecodeError, TypeError):
+            if not isinstance(payload, dict) or any(
+                key in payload and not isinstance(payload[key], list) for key in ('symbols', 'recent')
+            ):
+                raise ValueError('invalid watchlist structure')
+        except FileNotFoundError:
             payload = {}
-        if not isinstance(payload, dict):
+        except (ValueError, UnicodeError):
+            # Preserve damaged input before a later write starts a fresh list.
+            self.path.rename(self.path.with_name(f'{self.path.stem}.corrupt-{uuid.uuid4().hex}.json'))
             payload = {}
         self._symbols = _clean(payload.get("symbols"))
         self._recent = _clean(payload.get("recent"), limit=self.recent_limit)
@@ -76,23 +86,31 @@ class WatchlistStore:
         if not values:
             raise ValueError("symbol must be a simple identifier")
         value = values[0]
-        if value not in self._symbols:
-            self._symbols.append(value)
-            self._save()
+        with process_lock(self.path.with_suffix('.lock'), wait=True):
+            self._load()
+            if value not in self._symbols:
+                if len(self._symbols) >= 50:
+                    raise ValueError('watchlist supports at most 50 symbols')
+                self._symbols.append(value)
+                self._save()
 
     def remove(self, symbol: str) -> None:
         value = str(symbol or "").strip().upper()
-        updated = [item for item in self._symbols if item != value]
-        if updated != self._symbols:
-            self._symbols = updated
-            self._save()
+        with process_lock(self.path.with_suffix('.lock'), wait=True):
+            self._load()
+            updated = [item for item in self._symbols if item != value]
+            if updated != self._symbols:
+                self._symbols = updated
+                self._save()
 
     def record_recent(self, symbol: str) -> None:
         values = _clean([symbol])
         if not values:
             raise ValueError("symbol must be a simple identifier")
         value = values[0]
-        self._recent = [item for item in self._recent if item != value]
-        self._recent.insert(0, value)
-        self._recent = self._recent[: self.recent_limit]
-        self._save()
+        with process_lock(self.path.with_suffix('.lock'), wait=True):
+            self._load()
+            self._recent = [item for item in self._recent if item != value]
+            self._recent.insert(0, value)
+            self._recent = self._recent[: self.recent_limit]
+            self._save()

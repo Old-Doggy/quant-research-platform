@@ -74,7 +74,10 @@ def _render_watch_workspace_body(route_state: Any, *, app_globals: Mapping[str, 
             local_catalog = cached_stock_catalog(data_root, adjusted)
             symbols = [str(item["symbol"]) for item in local_catalog]
             stock_names = cached_symbol_names(data_root)
-            local_watchlist = watchlist_store()
+            try:
+                local_watchlist = watchlist_store()
+            except (OSError, ValueError) as exc:
+                show_safe_error(exc, operation='storage')
             search_query = st.text_input("搜索代码或名称", key="local_stock_search", placeholder="例如 000001 或 平安")
             search_results = search_stock_catalog(local_catalog, search_query)
             if search_results:
@@ -92,8 +95,8 @@ def _render_watch_workspace_body(route_state: Any, *, app_globals: Mapping[str, 
             else:
                 selected_from_search = ""
                 st.info("没有匹配的股票，请修改代码或名称。")
-            favorite_symbols = [code for code in local_watchlist.symbols if code in symbols]
-            recent_symbols = [code for code in local_watchlist.recent if code in symbols]
+            favorite_symbols = [code for code in local_watchlist.symbols if code in symbols] if local_watchlist else []
+            recent_symbols = [code for code in local_watchlist.recent if code in symbols] if local_watchlist else []
             if favorite_symbols:
                 st.caption("自选：" + "、".join(favorite_symbols))
             if recent_symbols:
@@ -108,18 +111,24 @@ def _render_watch_workspace_body(route_state: Any, *, app_globals: Mapping[str, 
             symbol = selected_from_search or (symbols[0] if symbols else "")
             if symbol and local_watchlist is not None:
                 if st.session_state.get("_last_recent_symbol") != symbol:
-                    local_watchlist.record_recent(symbol)
-                    st.session_state["_last_recent_symbol"] = symbol
+                    try:
+                        local_watchlist.record_recent(symbol)
+                        st.session_state["_last_recent_symbol"] = symbol
+                    except (OSError, ValueError) as exc:
+                        show_safe_error(exc, operation='storage')
                 favorite_action = st.button(
                     "移出自选" if symbol in local_watchlist.symbols else "加入自选",
                     key="toggle_local_watchlist",
                 )
                 if favorite_action:
-                    if symbol in local_watchlist.symbols:
-                        local_watchlist.remove(symbol)
-                    else:
-                        local_watchlist.add(symbol)
-                    st.rerun()
+                    try:
+                        if symbol in local_watchlist.symbols:
+                            local_watchlist.remove(symbol)
+                        else:
+                            local_watchlist.add(symbol)
+                        st.rerun()
+                    except (OSError, ValueError) as exc:
+                        show_safe_error(exc, operation='storage')
             selected_symbols = [symbol]
         else:
             symbol = ""

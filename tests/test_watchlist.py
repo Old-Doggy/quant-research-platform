@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import pytest
 
 from portfolio_app.watchlist import WatchlistStore
 
@@ -45,3 +46,38 @@ def test_watchlist_recovers_from_corrupt_state_and_validates_symbols(tmp_path):
     assert store.recent == []
     store.add("000001.SZ")
     assert store.symbols == ["000001.SZ"]
+
+
+@pytest.mark.parametrize('body', [b'{broken', b'\xff', b'[]', b'{"symbols": "bad"}'])
+def test_corrupt_watchlist_is_preserved_before_recovery(tmp_path, body):
+    path = tmp_path / 'watchlist.json'
+    path.write_bytes(body)
+    store = WatchlistStore(path)
+    store.add('600000.SH')
+    assert store.symbols == ['600000.SH']
+    backups = list(tmp_path.glob('watchlist.corrupt-*.json'))
+    assert len(backups) == 1 and backups[0].read_bytes() == body
+
+
+def test_unreadable_watchlist_is_not_treated_as_empty(tmp_path, monkeypatch):
+    from pathlib import Path
+    path = tmp_path / 'watchlist.json'
+    path.write_text('{"symbols": ["AAA"], "recent": []}', encoding='utf8')
+    original = Path.read_text
+    def denied(self, *args, **kwargs):
+        if self == path:
+            raise PermissionError('unreadable')
+        return original(self, *args, **kwargs)
+    monkeypatch.setattr(Path, 'read_text', denied)
+    with pytest.raises(PermissionError):
+        WatchlistStore(path)
+    assert b'AAA' in path.read_bytes()
+
+
+def test_separate_watchlist_instances_preserve_each_others_changes(tmp_path):
+    path = tmp_path / 'watchlist.json'
+    first, second = WatchlistStore(path), WatchlistStore(path)
+    first.add('AAA')
+    second.add('BBB')
+    first.record_recent('AAA')
+    assert WatchlistStore(path).symbols == ['AAA', 'BBB']
