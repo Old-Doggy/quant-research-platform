@@ -398,8 +398,11 @@ def _render_explicit_research_workspace(route_state) -> None:
                 "不连接 QMT、券商、账户或实盘提交系统",
                 "初始资金和成交数量为展示口径，不是账户资产记录",
             ]
-            sensitivity_records = build_single_stock_sensitivity_report(
-                selected,
+            from portfolio_app.return_series import build_return_series
+            sensitivity_input=selected.copy(deep=True)
+            sensitivity_input['return']=build_return_series(sensitivity_input)
+            sensitivity_frame = build_single_stock_sensitivity_report(
+                sensitivity_input,
                 strategy_key,
                 params=strategy_params,
                 transaction_cost=float(transaction_cost),
@@ -408,7 +411,8 @@ def _render_explicit_research_workspace(route_state) -> None:
                 execution_policies=("next_day_close", "next_day_open"),
                 start_date=selected["trade_date"].min(),
                 end_date=selected["trade_date"].max(),
-            ).to_dict("records")
+            )
+            sensitivity_records=sensitivity_frame.astype(object).where(sensitivity_frame.notna(),None).to_dict('records')
             archive = create_strategy_archive(
                 strategy={"strategy_id": strategy_key, "config": research.strategy_config},
                 dataset={

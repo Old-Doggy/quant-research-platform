@@ -23,6 +23,8 @@ def prepare_screen_research(store, result, session, *, target):
             or checked['session']!=result['session']):
         raise ValueError('筛选名单与固定行情版本不一致，请重新筛选')
     owned=frame.loc[frame.symbol.isin(checked['symbols'])].copy(deep=True)
+    # Provider volume is already normalized to shares; factor inputs use vol.
+    owned['vol']=owned['volume'].copy()
     audit_research_input(owned)
     context=ResearchContext(dataset_id=manifest['dataset_id'],workspace=target,
         symbol=checked['symbols'][0] if len(checked['symbols'])==1 else None,
@@ -42,3 +44,18 @@ def prepare_screen_research(store, result, session, *, target):
     session['_registered_research_dataset']=owned
     session['_use_registered_research_dataset']=True
     return route
+
+
+def screen_input_matches(session, context):
+    """A reopened fixed-pool link cannot silently run the demo or another pool."""
+    frame=session.get('_registered_research_dataset')
+    if not session.get('_use_registered_research_dataset') or frame is None:
+        return False
+    selection=frame.attrs.get('screen_selection',{})
+    metadata=frame.attrs.get('research_dataset',{})
+    return (selection.get('screen_id')==context.universe_id
+        and selection.get('selected_on')==str(context.as_of)
+        and metadata.get('dataset_id')==context.dataset_id
+        and metadata.get('snapshot_id')==context.snapshot_id
+        and metadata.get('selection_id')==identity_hash(selection)
+        and sorted(frame.symbol.unique())==sorted(context.symbols or (context.symbol,)))

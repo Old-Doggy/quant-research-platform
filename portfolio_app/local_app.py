@@ -1512,6 +1512,13 @@ def main() -> None:
     # the status from the previous Streamlit rerun.
     status_slot = st.empty()
     st.session_state.pop(f'_actual_context_{route_state.active_workspace}', None)
+    if (route_state.active_workspace in {'factors','strategy','portfolio'}
+            and (route_state.context.universe_id or '').startswith('screen-')):
+        from portfolio_app.screen_research_transfer import screen_input_matches
+        if not screen_input_matches(st.session_state,route_state.context):
+            st.error('此筛选名单尚未载入。请回到看盘，读取并核对原筛选，再送入研究。')
+            st.stop()
+        st.caption(f'{route_state.context.as_of}筛选的固定名单 · 仅诊断截至当日的历史，不表示历史逐日选股。')
     if route_state.active_workspace == "showcase":
         render_showcase_workspace(
             route_state,
